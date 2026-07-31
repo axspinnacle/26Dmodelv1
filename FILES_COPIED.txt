@@ -1,0 +1,60 @@
+GBMFirst Essential Files - Copy Summary
+========================================
+Date: 2026-07-31
+Source: /Users/Mach/dev/aps/code/2026GBMFirst/GBMFirstTest_26_v2/GBMFirst
+Destination: /Users/Mach/dev/aps/code/26Dmodelv1
+
+CORE PIPELINE FILES (4)
+-----------------------
+✓ template.ipynb                                  (17 KB)  - Main ML pipeline
+✓ utils.py                                        (2 KB)   - Config utilities
+✓ edited_20240314_symbols_gbm_functions.ipynb    (66 KB)  - GBM functions
+✓ generate_features.ipynb                         (3 KB)   - Feature engineering
+
+CONFIGURATION FILES (3)
+-----------------------
+✓ .clinerules                                     (1 KB)   - Project rules
+✓ .PC                                             (2 B)    - Machine ID (value: 3)
+✓ requirements.txt                                (<1 KB)  - Python dependencies
+
+EXPERIMENT CONFIG: config/car_coll/v1/ (3)
+------------------------------------------
+✓ config.yaml                                     - Experiment settings ⚠️ UPDATE THIS
+✓ feature_selection.csv                           - Feature inclusion list
+✓ feature_clipping.csv                            - Feature bounds
+
+RUNNERS (2)
+-----------
+✓ runners/run_one.ipynb                           - Execute single experiment
+✓ runners/run_all.ipynb                           - Execute batch experiments
+
+DOCUMENTATION (3)
+-----------------
+✓ SETUP_GUIDE.md                                  - Comprehensive setup instructions
+✓ CHECKLIST.md                                    - Quick start checklist
+✓ FILES_COPIED.txt                                - This file
+
+DIRECTORIES CREATED (3)
+-----------------------
+✓ config/car_coll/v1/
+✓ runners/
+✓ output/                                         - Will contain results
+
+FILES NOT COPIED (Reference Only)
+---------------------------------
+✗ oldcode/                                        - Historical notebooks (12 files)
+✗ oldcode_usedforfirsttest/                       - Archived code
+✗ output/car_coll/v1/                            - Old results (will be regenerated)
+
+TOTAL FILES COPIED: 15 files + 2 documentation files
+TOTAL SIZE: ~90 KB (excluding outputs)
+
+NEXT STEPS
+----------
+1. Edit config/car_coll/v1/config.yaml with new dataset paths
+2. Verify .PC file has correct machine number (currently: 3)
+3. Test run with debug mode enabled
+4. Review SETUP_GUIDE.md for detailed instructions
+5. Use CHECKLIST.md for quick reference
+
+STATUS: ✅ READY TO CONFIGURE

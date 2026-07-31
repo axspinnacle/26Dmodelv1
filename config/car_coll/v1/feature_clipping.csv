@@ -1,0 +1,5 @@
+feature_name,min,max
+vc_Wheelbase,90,120
+vc_Length,150,205
+vc_Displacement,2,5
+vc_derived_turn_to_length,0.18,0.22
