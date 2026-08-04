@@ -2,7 +2,77 @@
 Utility functions for GBMFirst project.
 """
 import yaml
+import os
 from pathlib import Path
+
+
+def get_project_root() -> Path:
+    """
+    Auto-detect project root by finding .PC file.
+    
+    Searches upward from current directory until .PC file is found.
+    
+    Returns:
+        Path: Project root directory
+        
+    Raises:
+        FileNotFoundError: If .PC file not found in any parent directory
+        
+    Example:
+        >>> root = get_project_root()
+        >>> print(root)
+        /Users/Mach/dev/aps/code/26Dmodelv1
+    """
+    current = Path.cwd()
+    
+    # Search current directory and all parents
+    for directory in [current] + list(current.parents):
+        if (directory / '.PC').exists():
+            return directory
+    
+    raise FileNotFoundError(
+        "Could not find project root. No .PC file found in current directory or parents."
+    )
+
+
+def get_machine_id() -> int:
+    """
+    Read machine ID from .PC file.
+    
+    Returns:
+        int: Machine ID (1-4)
+        
+    Example:
+        >>> machine_id = get_machine_id()
+        >>> print(f"Running on PC{machine_id}")
+        Running on PC3
+    """
+    root = get_project_root()
+    with open(root / '.PC') as f:
+        return int(f.read().strip())
+
+
+def setup_notebook_environment():
+    """
+    Setup notebook environment for consistent execution.
+    
+    - Detects project root
+    - Changes to project root directory
+    - Returns project root path
+    
+    Call this at the start of every notebook for cross-machine compatibility.
+    
+    Returns:
+        Path: Project root directory
+        
+    Example:
+        >>> from lib.utils import setup_notebook_environment
+        >>> project_root = setup_notebook_environment()
+        >>> print(f"Working in: {project_root}")
+    """
+    project_root = get_project_root()
+    os.chdir(project_root)
+    return project_root
 
 
 def get_machine_config(config_path: str) -> dict:

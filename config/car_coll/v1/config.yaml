@@ -1,110 +1,69 @@
+# CAR COLLISION MODEL - Version 1
+# Configuration for pp_bi target (bodily injury pure premium)
+
 experiment:
-  name: "CAR COLL v1"
-  template: "standard_gbm"
-  veh_type: "CAR"
+  name: "car_coll_v1"
+  description: "Car collision model - baseline"
+  target: "pp_bi"
   coverage: "coll"
 
-machines:
-  PC1:
-    conda_env: ""
-    paths:
-      path_prefix: ""
-      input_data_dir: ""
-      ep_data_dir: ""
-      support_dir: ""
-  
-  PC2:
-    conda_env: "py39_26v1"
-    paths:
-      path_prefix: "/home/carfax_shared/carfax_codedata_refreshv4/datainout/"
-      input_data_dir: "datain/"
-      ep_data_dir: "ep_data/"
-      support_dir: "Other Support/"
-  
-  PC3:
-    conda_env: "py39_26v1"
-    paths:
-      path_prefix: "/Users/Mach/dev/aps/data/2024_CX_Cmodel/v2/"
-      input_data_dir: ""
-      ep_data_dir: "ep_data/"
-      support_dir: "Other Support/"
-  
-  PC4:
-    conda_env: ""
-    paths:
-      path_prefix: ""
-      input_data_dir: ""
-      ep_data_dir: ""
-      support_dir: ""
+# Debug levels: 1=fold1, 2=folds1-2, 3=folds1-5, 0=production
+debug:
+  level: 1              # Start with fold 1 for fast testing
+  test_fold: 6          # Always use fold 6 for test
+  fold_mapping:
+    1: [1]              # Debug 1: just fold 1
+    2: [1, 2]           # Debug 2: folds 1-2
+    3: [1, 2, 3, 4, 5]  # Debug 3: all training folds
+    0: [1, 2, 3, 4, 5]  # Production: all training folds
 
-files:
-  input_file_pattern: "selectedcolumns_{veh_type}_trainvaliddata_v2.csv"
-  ep_file: "data_ep.csv"
-  feature_selection: "feature_selection.csv"
-  feature_clipping: "feature_clipping.csv"
+# Paths
+paths:
+  data_root: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
+  output_base: "output/car_coll/v1"
+  
+# Data sources
+# NOTE: Master file does NOT have fold - must join with aux file
+# Aux file contains fold and depreciation factors
+data:
+  master_file: "master_dataset_car.parquet"
+  aux_file: "car_with_dep_factor_fold.parquet"
+  join_key: "vin_date"  # Column name for join (vindate or similar)
+  fold_column: "fold"   # Column in AUX file only
+  join_type: "inner"    # Inner join to keep only matched records
+  columns_to_load_file: "columns_to_load_during_dataassembly.csv"  # Subset of columns to load (performance)
+  
+# Feature configuration
+# Features loaded from CSV file with category/range metadata
+features:
+  inclusion_file: "columns_inclusion.csv"  # 90 features from CSV
+  exclusion_file: null                      # Optional: columns to exclude
+  blank_file: null                          # Optional: columns to treat as blank
 
-model:
-  debug: false
-  debug_rows: 4000000
-
+# XGBoost parameters
 xgboost:
-  tweedie_p: 1.5
-  base_margin_factor: 0.08
-  max_depth: 6
-  num_round: 100
+  objective: "reg:tweedie"
+  tweedie_variance_power: 1.5
+  learning_rate: 0.05
+  max_depth: 4
   min_child_weight: 1000
-  subsample: 0.8
+  subsample: 1.0
   colsample_bytree: 1.0
-  alpha: 0.25
+  alpha: 10
+  n_estimators: 5000
+  tree_method: "hist"
+  device: "cpu"
+  random_state: 42
+  verbosity: 1
 
-columns:
-  denom_column: "rc_glm_pred_coll"
-  offset_column: "offset_AME_VT_VV_coll"
+# Execution control
+execution:
+  stages:
+    stage_01: true  # Data assembly
+    stage_02: true  # Data conditioning  
+    stage_03: true  # Verification
+    stage_04: true  # Model prep
+    stage_05: true  # Model training
   
-  drop_columns:
-    - "Unnamed: 0"
-    - "bsst"
-    - "rc_glm_pred_bi"
-    - "rc_glm_pred_pd"
-    - "rc_glm_pred_pip"
-    - "rc_glm_pred_med"
-    - "rc_glm_pred_um_uim"
-    - "rc_glm_pred_tot"
-    - "ee_bi"
-    - "ee_pd"
-    - "ee_pip"
-    - "ee_med"
-    - "ee_um_uim"
-    - "ee_tot"
-    - "RolloverRisk"
-    - "veh_type_factor_coll"
-    - "AME_offset_coll"
-    - "coll_primary_VV_offset"
-
-  pass_through_columns:
-    - "train"
-    - "VIN_Date"
-    - "rc_glm_pred_coll"
-    - "ee_coll"
-    - "incurred_cap_AME_VV_VT_coll"
-    - "offset_AME_VT_VV_coll"
-
-  float_precision_columns:
-    - "vc_Acceleration_0_to_60"
-    - "vc_Bed_Length"
-    - "vc_Displacement"
-    - "vc_derived_hp_to_density"
-    - "vc_derived_hp_to_turn"
-
-additional_blank_list:
-  # From production CAR COLL notebook - Round 1.0
-  - "vc_Power_Folding_Side_Mirrors"
-  - "vc_DVD_Player"
-  - "vc_Reverse_Automatic_Emergency_Braking"
-  - "vc_Navigation_Touchscreen"
-  - "vc_Night_Vision"
-  - "vc_Forward_Automatic_Emergency_Braking"
-  - "vc_Visual_Forward_Collision_Warning"
-  # Final Fit
-  - "vc_Automatic_Emergency_Braking"
-  - "vc_Audible_Forward_Collision_Warning"
+  stop_on_error: true
+  cleanup_memory: true
