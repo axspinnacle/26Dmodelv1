@@ -1,0 +1,7 @@
+n_features: 90
+test_mae: 372.1642588372657
+test_rmse: 25140.77464627217
+test_size: 2707950
+train_mae: 348.8493544966844
+train_rmse: 14973.874209231417
+train_size: 2716120

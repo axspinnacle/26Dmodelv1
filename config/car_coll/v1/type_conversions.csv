@@ -1,0 +1,7 @@
+column_name,source_dtype,target_dtype,notes
+NumMajViol_raw,object,numeric,Major violations count (0-3)
+NumMajinAcc_raw,object,numeric,Major accidents count (0-1)
+NumMinAcc_raw,object,numeric,Minor accidents count (0-2)
+NumMinViol_raw,object,numeric,Minor violations count (0-3)
+NumSpdViol_raw,object,numeric,Speed violations count (0-1)
+late_payments_raw,object,numeric,Late payments count
