@@ -1,2 +1,4 @@
 .clinerules
 .PC
+*.pyc
+*.parquet

@@ -93,3 +93,5 @@ cef_first_cpo_ind,vehicle_history,0-1,First CPO indicator
 cef_first_poten_dam_ind,vehicle_history,0-1,First potential damage indicator
 cef_first_sev_prob_ind,vehicle_history,0-1,First severe problem indicator
 cef_lien_holder_ind,ownership,0-1,Lien holder indicator
+vin_date,join_key,N/A,Join key for master-aux merge
+
