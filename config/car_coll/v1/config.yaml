@@ -2,9 +2,10 @@
 # Configuration for pp_bi target (bodily injury pure premium)
 
 experiment:
-  name: "car_coll_v1"
-  description: "Car collision model - baseline"
+  name: "car_bi_v1"
+  description: "Car body injury model - baseline"
   target: "pp_bi"
+  exposure: "ee_bi"
   coverage: "coll"
 
 # Debug levels: 1=fold1, 2=folds1-2, 3=folds1-5, 0=production
@@ -59,11 +60,13 @@ xgboost:
 # Execution control
 execution:
   stages:
-    stage_01: true  # Data assembly
-    stage_02: true  # Data conditioning  
-    stage_03: true  # Verification
-    stage_04: true  # Model prep
-    stage_05: true  # Model training
+    stage_01: false  # Data assembly
+    stage_02: false  # Data conditioning  
+    stage_03: false  # Verification
+    stage_04: false  # Model prep
+    stage_05: false  # Model training
+    stage_06: true   # SHAP dataframe
+    stage_07: false
   
   stop_on_error: true
   cleanup_memory: true

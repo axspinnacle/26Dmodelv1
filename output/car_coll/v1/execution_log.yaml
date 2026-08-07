@@ -1,11 +1,12 @@
 config_path: config/car_coll/v1
-duration_seconds: 204.749555
-end_time: '2026-08-06T09:40:01.479164'
-experiment: car_coll_v1
+duration_seconds: 8.225923
+end_time: '2026-08-07T14:50:00.564889'
+experiment: car_bi_v1
 results:
-  stage_01: success
-  stage_02: success
-  stage_03: success
-  stage_04: success
-  stage_05: failed
-start_time: '2026-08-06T09:36:36.729609'
+  stage_01: skipped
+  stage_02: skipped
+  stage_03: skipped
+  stage_04: skipped
+  stage_05: skipped
+  stage_06: failed
+start_time: '2026-08-07T14:49:52.338966'
