@@ -8,30 +8,7 @@ import time
 
 
 def create_lift_chart(data, weight_name, bins=10, title="Lift Chart"):
-    """
-    Create lift chart with optimized performance.
-    
-    OPTIMIZATION: Only copy columns we need instead of entire dataframe.
-    This reduces memory usage and speeds up sorting by 10-50x.
-    
-    Parameters:
-    -----------
-    data : pd.DataFrame
-        Dataset with predictions and actuals
-    weight_name : str
-        Column name to use as weight
-    bins : int
-        Number of deciles/bins (default 10)
-    title : str
-        Chart title
-        
-    Returns:
-    --------
-    fig : matplotlib.figure.Figure
-        The plot figure
-    x : pd.DataFrame
-        Aggregated decile table
-    """
+    """Create lift chart (optimized for large data). Usage: fig, decile_df = create_lift_chart(data, 'weight', bins=10)"""
     t0 = time.time()
     
     # Step 1: Create column list

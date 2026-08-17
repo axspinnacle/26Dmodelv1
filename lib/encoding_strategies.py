@@ -32,15 +32,42 @@ from sklearn.preprocessing import OneHotEncoder
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PROJECT_ROOT  = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-TRAIN_PATH    = "/Users/Mach/dev/aps/data/2026_Dmodel_data/train_combined.parquet"
-TEST_PATH     = "/Users/Mach/dev/aps/data/2026_Dmodel_data/test_combined.parquet"
+
+# Default paths - can be overridden by passing data_root parameter to functions
+# These are kept for backward compatibility but should be set from config in practice
+TRAIN_PATH    = None  # Set dynamically from config or passed as parameter
+TEST_PATH     = None  # Set dynamically from config or passed as parameter
 MAPPING_CSV   = os.path.join(PROJECT_ROOT, "config", "level_mapping_reference.csv")
+
+
+def set_data_paths(data_root: str):
+    """Configure global data paths. Usage: set_data_paths("/path/to/data")"""
+    global TRAIN_PATH, TEST_PATH
+    TRAIN_PATH = os.path.join(data_root, "train_combined.parquet")
+    TEST_PATH = os.path.join(data_root, "test_combined.parquet")
+    print(f"✓ Data paths configured:")
+    print(f"  TRAIN: {TRAIN_PATH}")
+    print(f"  TEST:  {TEST_PATH}")
+
+# Legacy config.json support - falls back to safe defaults if not found
 CONFIG_PATH   = os.path.join(PROJECT_ROOT, "config.json")
 
-# ── Load modeling config from config.json ─────────────────────────────────────
+# ── Load modeling config from config.json (legacy) or use defaults ────────────
 def _load_config() -> dict:
-    with open(CONFIG_PATH) as f:
-        return json.load(f)
+    """Load config.json if it exists, otherwise return safe defaults."""
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH) as f:
+            return json.load(f)
+    else:
+        # Return safe defaults when config.json doesn't exist
+        return {
+            "modeling": {
+                "target_column": "pp_bi",
+                "target_ceiling": None,
+                "ceiling_applies_to": [],
+                "exposure_column": "ee_bi"
+            }
+        }
 
 _cfg              = _load_config()
 TARGET            = _cfg["modeling"]["target_column"]           # e.g. "pp_bi"
@@ -135,24 +162,21 @@ def _debug_label(debug: int) -> str:
     return {0: "FULL", 1: "DEBUG-10K", 2: "DEBUG-10%"}.get(debug, "FULL")
 
 
-def load_train_only(debug: int = 1) -> pd.DataFrame:
-    """Return train_df with target rows where TARGET is not null.
-
-    Loads only the training parquet — keeps memory free for encoding/training.
-    dtype-optimized immediately after load (float64→float32, int64→int32).
-
-    Parameters
-    ----------
-    debug : int
-        0 = full data
-        1 = first 10K rows (fast smoke test)
-        2 = random 10% sample (medium-scale run, ~10× bigger than debug=1)
-    """
+def load_train_only(debug: int = 1, data_root: str = None) -> pd.DataFrame:
+    """Load train data. debug: 0=full, 1=10K rows, 2=10% sample. Usage: train = load_train_only(debug=1)"""
     optimize_dtypes = _optimize()
     label = _debug_label(debug)
 
-    print(f"[{label}] Loading train ...")
-    train = pd.read_parquet(TRAIN_PATH)
+    # Determine train path
+    train_path = TRAIN_PATH
+    if data_root is not None:
+        train_path = os.path.join(data_root, "train_combined.parquet")
+    elif TRAIN_PATH is None:
+        raise ValueError("TRAIN_PATH not set and data_root not provided. "
+                         "Please pass data_root parameter or set TRAIN_PATH.")
+
+    print(f"[{label}] Loading train from {train_path} ...")
+    train = pd.read_parquet(train_path)
 
     if debug == 1:
         train = train.head(DEBUG_N_TRAIN)
@@ -173,25 +197,21 @@ def load_train_only(debug: int = 1) -> pd.DataFrame:
     return train
 
 
-def load_test_only(debug: int = 1) -> pd.DataFrame:
-    """Return test_df with target rows where TARGET is not null.
-
-    Loads only the test parquet — call this in the separate evaluation notebook
-    after all models have been trained and saved.
-    dtype-optimized immediately after load (float64→float32, int64→int32).
-
-    Parameters
-    ----------
-    debug : int
-        0 = full data
-        1 = first 2K rows
-        2 = random 10% sample
-    """
+def load_test_only(debug: int = 1, data_root: str = None) -> pd.DataFrame:
+    """Load test data. debug: 0=full, 1=2K rows, 2=10% sample. Usage: test = load_test_only(debug=1)"""
     optimize_dtypes = _optimize()
     label = _debug_label(debug)
 
-    print(f"[{label}] Loading test ...")
-    test = pd.read_parquet(TEST_PATH)
+    # Determine test path
+    test_path = TEST_PATH
+    if data_root is not None:
+        test_path = os.path.join(data_root, "test_combined.parquet")
+    elif TEST_PATH is None:
+        raise ValueError("TEST_PATH not set and data_root not provided. "
+                         "Please pass data_root parameter or set TEST_PATH.")
+
+    print(f"[{label}] Loading test from {test_path} ...")
+    test = pd.read_parquet(test_path)
 
     if debug == 1:
         test = test.head(DEBUG_N_TEST)
@@ -205,29 +225,31 @@ def load_test_only(debug: int = 1) -> pd.DataFrame:
     return test
 
 
-def load_train_test(debug: int = 1) -> tuple:
-    """Return (train_df, test_df) with target rows where TARGET is not null.
-
-    Loads both datasets simultaneously.  Use load_train_only() + load_test_only()
-    instead when memory is a concern (full-data runs).
-
-    Parameters
-    ----------
-    debug : int  – 0 = full, 1 = 10K/2K rows, 2 = 10% sample
-    """
+def load_train_test(debug: int = 1, data_root: str = None) -> tuple:
+    """Load both train and test. debug: 0=full, 1=fast, 2=sample. Usage: train, test = load_train_test(debug=1)"""
     optimize_dtypes = _optimize()
     label = _debug_label(debug)
 
-    print(f"[{label}] Loading train ...")
-    train = pd.read_parquet(TRAIN_PATH)
+    # Determine paths
+    train_path = TRAIN_PATH
+    test_path = TEST_PATH
+    if data_root is not None:
+        train_path = os.path.join(data_root, "train_combined.parquet")
+        test_path = os.path.join(data_root, "test_combined.parquet")
+    elif TRAIN_PATH is None or TEST_PATH is None:
+        raise ValueError("TRAIN_PATH/TEST_PATH not set and data_root not provided. "
+                         "Please pass data_root parameter or set paths.")
+
+    print(f"[{label}] Loading train from {train_path} ...")
+    train = pd.read_parquet(train_path)
     if debug == 1:
         train = train.head(DEBUG_N_TRAIN)
     elif debug == 2:
         train = train.sample(frac=DEBUG_FRAC_TRAIN, random_state=42)
     train = optimize_dtypes(train)
 
-    print(f"[{label}] Loading test  ...")
-    test = pd.read_parquet(TEST_PATH)
+    print(f"[{label}] Loading test from {test_path} ...")
+    test = pd.read_parquet(test_path)
     if debug == 1:
         test = test.head(DEBUG_N_TEST)
     elif debug == 2:
@@ -243,14 +265,7 @@ def load_train_test(debug: int = 1) -> tuple:
 
 
 def get_y(df: pd.DataFrame) -> pd.Series:
-    """
-    Extract target column and apply ceiling cap if configured.
-
-    Ceiling (from config.json -> modeling.target_ceiling) is only applied
-    to columns listed in modeling.ceiling_applies_to (e.g. pp_bi, pp_pd).
-
-    To switch targets, change 'target_column' in config.json.
-    """
+    """Extract target column with ceiling cap. Usage: y = get_y(train_df)"""
     y = df[TARGET].astype("float32")
     if TARGET_CEILING is not None and TARGET in CEILING_COLS:
         n_capped = (y > TARGET_CEILING).sum()
@@ -627,21 +642,7 @@ def _transform_ohe(col: str, s: pd.Series, enc: OneHotEncoder) -> pd.DataFrame:
 # ============================================================================
 
 def encode_type1_ordinal(train: pd.DataFrame, test: pd.DataFrame = None):
-    """
-    Type 1 – Ordinal: pass all numeric features through unchanged.
-    Object columns are One-Hot Encoded (fit on train, applied to test).
-
-    Parameters
-    ----------
-    train : DataFrame  – training data (used to fit encoders)
-    test  : DataFrame or None – if None, only X_train + encoders are returned
-            (use encode_type1_ordinal_transform to apply to test later)
-
-    Returns
-    -------
-    If test is provided : X_train, X_test, feature_names, encoders
-    If test is None     : X_train, feature_names, encoders
-    """
+    """Type 1: Keep numeric ordinal, OHE objects. Usage: X_tr, X_te, names, enc = encode_type1_ordinal(train, test)"""
     print("  [Type 1] Ordinal encoding ...")
     num_cols = _get_numeric_features(train)
     obj_cols = _get_object_features(train)
@@ -699,21 +700,7 @@ def encode_type1_ordinal(train: pd.DataFrame, test: pd.DataFrame = None):
 
 
 def encode_type2_binary(train: pd.DataFrame, test: pd.DataFrame = None):
-    """
-    Type 2 – Binary: collapse every 0-5 feature to {0,1} using default
-    {0,1,2}->0, {3,4,5}->1. Non-0-5 numerics pass through. Object columns
-    are One-Hot Encoded (fit on train).
-
-    Parameters
-    ----------
-    train : DataFrame  – training data (used to fit encoders)
-    test  : DataFrame or None – if None, only X_train + encoders are returned
-
-    Returns
-    -------
-    If test is provided : X_train, X_test, feature_names, encoders
-    If test is None     : X_train, feature_names, encoders
-    """
+    """Type 2: Collapse 0-5 to binary. Usage: X_tr, X_te, names, enc = encode_type2_binary(train, test)"""
     print("  [Type 2] Binary encoding ...")
     num_cols = _get_numeric_features(train)
     obj_cols = _get_object_features(train)
@@ -784,30 +771,7 @@ def encode_type2_binary(train: pd.DataFrame, test: pd.DataFrame = None):
 
 
 def encode_type3_actuarial(train: pd.DataFrame, test: pd.DataFrame = None):
-    """
-    Type 3 – Actuarial: per-column strategy from LevelMapping.docx (DH-Liab).
-
-    Strategies applied:
-      ordered       -> keep 0-5 numeric as-is
-      binary_low_hi -> {0,1,2}->0, {3,4,5}->1
-      binary_lo_high-> {0,1,2,3}->0, {4,5}->1
-      ohe           -> OneHotEncoder (fit on train)
-      h_map2to4     -> remap 2->4, keep ordinal
-      ohe_map2to4   -> remap 2->4 then OHE
-      group_ohe     -> OHE (string grouping delegated to OHE's handle_unknown)
-      drop          -> feature excluded
-      not_specified -> pass through numeric; label-encode strings
-
-    Parameters
-    ----------
-    train : DataFrame – training data (encoders fitted here)
-    test  : DataFrame or None – if None returns (X_train, feat_names, encoders)
-
-    Returns
-    -------
-    If test is provided : X_train, X_test, feat_names, encoders
-    If test is None     : X_train, feat_names, encoders
-    """
+    """Type 3: Actuarial strategies per column. Usage: X_tr, X_te, names, enc = encode_type3_actuarial(train, test)"""
     print("  [Type 3] Actuarial encoding ...")
     mapping = _load_mapping()
     strategy_map = dict(zip(mapping["feature"], mapping["type_3_strategy_code"]))
@@ -925,27 +889,7 @@ def encode_type3_actuarial(train: pd.DataFrame, test: pd.DataFrame = None):
 
 
 def encode_type4_custom(train: pd.DataFrame, test: pd.DataFrame = None):
-    """
-    Type 4 – Custom: Map 2->4 transformation + binary grouping.
-    
-    For all 0-5 features:
-      1. Remap level 2 -> level 4  (using _apply_h_map2to4)
-      2. Apply binary grouping: {0,1,4}->0 | {3,5}->1
-      
-    Result: Features will only have levels {0, 1, 3, 4, 5} (no level 2).
-    Non-0-5 numeric features pass through unchanged.
-    String features are One-Hot Encoded (fit on train).
-
-    Parameters
-    ----------
-    train : DataFrame – training data (encoders fitted here)
-    test  : DataFrame or None – if None returns (X_train, feat_names, encoders)
-
-    Returns
-    -------
-    If test is provided : X_train, X_test, feat_names, encoders
-    If test is None     : X_train, feat_names, encoders
-    """
+    """Type 4: Map 2->4 then binary. Usage: X_tr, X_te, names, enc = encode_type4_custom(train, test)"""
     print("  [Type 4] Custom encoding (map 2->4, then binary {0,1,4}->0 | {3,5}->1) ...")
     num_cols = _get_numeric_features(train)
     obj_cols = _get_object_features(train)

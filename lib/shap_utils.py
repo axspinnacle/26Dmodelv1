@@ -11,19 +11,7 @@ import matplotlib.pyplot as plt
 
 
 def compute_shap_aggregate(shap_df, weight_col='weight'):
-    """
-    Aggregate SHAP values by feature, weighted and sorted.
-    
-    Args:
-        shap_df: DataFrame with SHAP values and weights
-        weight_col: Name of weight column
-        
-    Returns:
-        tuple: (shagg, shagg_num, shagg2)
-            - shagg: All features sorted by total SHAP
-            - shagg_num: Features with cumulative SHAP percentages
-            - shagg2: Features with total_shap > 0
-    """
+    """Aggregate SHAP values by feature (weighted). Usage: shagg, shagg_num, shagg2 = compute_shap_aggregate(shap_df)"""
     fc_df2 = shap_df.copy()
     
     # Get all columns except weight and base_value
@@ -53,19 +41,7 @@ def compute_shap_aggregate(shap_df, weight_col='weight'):
 
 
 def create_residual_plot(data, feature, weight, round_value=2, print_table=False):
-    """
-    Create residual plot comparing actual vs predicted by feature.
-    
-    Args:
-        data: DataFrame with predictions and actuals
-        feature: Feature column name
-        weight: Weight column name
-        round_value: Decimal places to round feature values
-        print_table: Whether to print summary table
-        
-    Returns:
-        tuple: (fig, summary_df)
-    """
+    """Plot actual vs predicted by feature. Usage: fig, df = create_residual_plot(data, 'DrvAge_raw', 'weight')"""
     # Aggregate by feature
     agg_dict = {weight: 'sum', 'incurred_act': 'sum', 'incurred_pred': 'sum', 'denom': 'sum'}
     x = data.groupby([feature]).agg(agg_dict).reset_index()
@@ -106,23 +82,7 @@ def create_residual_plot(data, feature, weight, round_value=2, print_table=False
 def create_shap_range_plot(shap_df, data_df, feature, weight_field, 
                           shap_round_level=3, feature_round_to=1, 
                           min_ntile=0, max_ntile=0, filter_used_only=False):
-    """
-    Create SHAP contribution range plot by feature value ntiles.
-    
-    Args:
-        shap_df: DataFrame with SHAP contributions (one column per feature)
-        data_df: DataFrame with actual feature values and weights
-        feature: Feature column name
-        weight_field: Weight column name in data_df
-        shap_round_level: Decimal places to round SHAP values
-        feature_round_to: Rounding increment for feature values (0=no rounding)
-        min_ntile: Minimum ntile to include (0-100)
-        max_ntile: Maximum ntile to include (0-100)
-        filter_used_only: If True, exclude rows where SHAP contribution is 0
-        
-    Returns:
-        tuple: (fig, aggregated_df)
-    """
+    """SHAP range plot across ntiles. Usage: fig, df = create_shap_range_plot(shap_df, data_df, 'feature', 'weight')"""
     # Combine data and SHAP
     cf_df = data_df[[feature, weight_field]].reset_index(drop=True).copy()
     cf_df.rename(columns={weight_field: 'weight'}, inplace=True)
@@ -198,16 +158,7 @@ def create_shap_range_plot(shap_df, data_df, feature, weight_field,
 
 
 def create_feature_importance_plot(shagg_df, top_n=20):
-    """
-    Create horizontal bar chart of top N features by SHAP importance.
-    
-    Args:
-        shagg_df: DataFrame from compute_shap_aggregate (shagg or shagg_num)
-        top_n: Number of top features to show
-        
-    Returns:
-        matplotlib Figure
-    """
+    """Bar chart of top N features by SHAP. Usage: fig = create_feature_importance_plot(shagg_df, top_n=20)"""
     top_features = shagg_df.head(top_n).copy()
     
     fig, ax = plt.subplots(figsize=(10, max(6, top_n * 0.4)))

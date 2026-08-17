@@ -1,5 +1,14 @@
+# IDE and machine-specific files
 .clinerules
 .PC
+.vscode/
+
+# Python
 *.pyc
+__pycache__/
+
+# Data files
 *.parquet
-documentation/TemplateCodeExplanation.md
+
+# Documentation (machine-specific)
+documentation/

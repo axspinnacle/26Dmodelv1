@@ -59,14 +59,32 @@ xgboost:
 
 # Execution control
 execution:
+  kernel_name: "py311_26v1"  # Jupyter kernel for papermill execution
+  
   stages:
     stage_01: false  # Data assembly
     stage_02: false  # Data conditioning  
     stage_03: false  # Verification
     stage_04: false  # Model prep
     stage_05: false  # Model training
-    stage_06: true   # SHAP dataframe
-    stage_07: false
+    stage_06: false  # SHAP dataframe
+    stage_07: true   # SHAP analysis & plots
   
   stop_on_error: true
   cleanup_memory: true
+
+# SHAP Analysis Configuration
+shap_analysis:
+  top_n_features: 40  # Number of top features to plot
+  datasets: ["train", "test"]  # Which datasets to analyze
+  
+  residual_plot:
+    round_value: 2
+    print_table: true
+  
+  shap_range_plot:
+    shap_round_level: 3
+    feature_round_to: 0.001
+    min_ntile: 5
+    max_ntile: 95
+    filter_used_only: false

@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 def export_schema(parquet_file, output_csv):
-    """Export column names and dtypes from parquet file to CSV"""
+    """Export parquet schema to CSV. Usage: export_schema('file.parquet', 'schema.csv')"""
     
     print(f"Reading schema from: {parquet_file}")
     
