@@ -68,7 +68,7 @@ execution:
     stage_04: false  # Model prep
     stage_05: false  # Model training
     stage_06: false  # SHAP dataframe
-    stage_07: true   # SHAP analysis & plots
+    stage_07: true   # SHAP analysis & plot from df
   
   stop_on_error: true
   cleanup_memory: true
