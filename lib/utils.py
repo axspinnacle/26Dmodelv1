@@ -68,7 +68,37 @@ def load_config(config_path: str) -> dict:
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    # Add current machine config
-    config['machine'] = get_machine_config(config_path)
+    # Get machine-specific config
+    machine_config = get_machine_config(config_path)
+    config['machine'] = machine_config
+    
+    # Merge machine-specific paths with common paths
+    # Machine-specific paths take precedence over common paths
+    if 'paths' in machine_config and 'paths' in config:
+        # Start with common paths
+        merged_paths = config['paths'].copy()
+        # Override with machine-specific paths
+        for key, value in machine_config['paths'].items():
+            if value is not None:  # Only override if machine path is not null
+                merged_paths[key] = value
+        config['paths'] = merged_paths
+    elif 'paths' in machine_config:
+        # Only machine paths exist
+        config['paths'] = machine_config['paths']
     
     return config
+
+
+def get_data_root(config_path: str = 'config/car_coll/v1/config.yaml') -> str:
+    """Get data_root for current machine. Usage: data_root = get_data_root()"""
+    config = load_config(config_path)
+    data_root = config['paths']['data_root']
+    
+    if data_root is None:
+        pc_num = get_machine_id()
+        raise ValueError(
+            f"data_root not configured for PC{pc_num}. "
+            f"Please edit {config_path} and set machines.PC{pc_num}.paths.data_root"
+        )
+    
+    return data_root

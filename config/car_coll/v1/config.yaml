@@ -18,9 +18,32 @@ debug:
     3: [1, 2, 3, 4, 5]  # Debug 3: all training folds
     0: [1, 2, 3, 4, 5]  # Production: all training folds
 
-# Paths
+# Machine-specific configuration (selected automatically based on .PC file)
+# The .PC file contains a number (1-4) that determines which machine config to use
+machines:
+  PC1:
+    # Not configured - add your paths here when setting up PC1
+    conda_env: "py311_26v1"
+    paths:
+      data_root: null
+  PC2:
+    # Linux server (carfax shared)
+    conda_env: "py311_26v1"
+    paths:
+      data_root: "/home/carfax_shared/data/2026_Dmodel_data"
+  PC3:
+    # Windows - Machine Learning Development local development under user aps
+    conda_env: "py311_26v1"
+    paths:
+      data_root: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
+  PC4:
+    # Not configured - add your paths here when setting up PC4
+    conda_env: "py311_26v1"
+    paths:
+      data_root: null
+
+# Common paths (apply to all machines)
 paths:
-  data_root: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
   output_base: "output/car_coll/v1"
   
 # Data sources
