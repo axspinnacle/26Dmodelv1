@@ -18,8 +18,8 @@ debug:
     3: [1, 2, 3, 4, 5]  # Debug 3: all training folds
     0: [1, 2, 3, 4, 5]  # Production: all training folds
 
-# Machine-specific configuration (selected automatically based on .PC file)
-# The .PC file contains a number (1-4) that determines which machine config to use
+# Machine-specific configuration (selected automatically based on current.pc file)
+# The current.pc file contains a number (1-4) that determines which machine config to use
 machines:
   PC1:
     # Not configured - add your paths here when setting up PC1

@@ -7,23 +7,23 @@ from pathlib import Path
 
 
 def get_project_root() -> Path:
-    """Find project root by searching up for .PC file. Usage: root = get_project_root()"""
+    """Find project root by searching up for current.pc file. Usage: root = get_project_root()"""
     current = Path.cwd()
     
     # Search current directory and all parents
     for directory in [current] + list(current.parents):
-        if (directory / '.PC').exists():
+        if (directory / 'current.pc').exists():
             return directory
     
     raise FileNotFoundError(
-        "Could not find project root. No .PC file found in current directory or parents."
+        "Could not find project root. No current.pc file found in current directory or parents."
     )
 
 
 def get_machine_id() -> int:
-    """Read machine ID from .PC file (returns 1-4). Usage: pc_id = get_machine_id()"""
+    """Read machine ID from current.pc file (returns 1-4). Usage: pc_id = get_machine_id()"""
     root = get_project_root()
-    with open(root / '.PC') as f:
+    with open(root / 'current.pc') as f:
         return int(f.read().strip())
 
 
@@ -35,17 +35,17 @@ def setup_notebook_environment():
 
 
 def get_machine_config(config_path: str) -> dict:
-    """Get machine-specific config from .PC file. Usage: cfg = get_machine_config('config/car_coll/v1/config.yaml')"""
-    # Find project root (where .PC file is located)
+    """Get machine-specific config from current.pc file. Usage: cfg = get_machine_config('config/car_coll/v1/config.yaml')"""
+    # Find project root (where current.pc file is located)
     config_file = Path(config_path)
     project_root = config_file.parent
-    while not (project_root / '.PC').exists() and project_root != project_root.parent:
+    while not (project_root / 'current.pc').exists() and project_root != project_root.parent:
         project_root = project_root.parent
     
-    pc_file = project_root / '.PC'
+    pc_file = project_root / 'current.pc'
     if not pc_file.exists():
         raise FileNotFoundError(
-            f".PC file not found. Create a .PC file in the project root with a number (1-4)."
+            f"current.pc file not found. Create a current.pc file in the project root with a number (1-4)."
         )
     
     # Read PC number

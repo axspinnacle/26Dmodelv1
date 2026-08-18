@@ -81,6 +81,15 @@ See `documentation/QUICKSTART_PY311.md` for detailed setup instructions.
 
 ---
 
+## Machine Setup
+
+**First-time setup:** Create a `current.pc` file in the project root:
+```bash
+echo "3" > current.pc  # Use 2 for Linux server, 3 for Mac
+```
+
+This file determines which data paths are used (configured in `config.yaml`).
+
 ## Configuration
 
 Models are configured via YAML files in `config/{model}/{version}/`:
