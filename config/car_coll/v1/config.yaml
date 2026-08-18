@@ -28,7 +28,7 @@ machines:
       data_root: null
   PC2:
     # Linux server (carfax shared)
-    conda_env: "py311_26v1"
+    conda_env: "carfax26v1"
     paths:
       data_root: "/home/carfax_shared/data/2026_Dmodel_data"
   PC3:
