@@ -25,22 +25,26 @@ machines:
     # Not configured - add your paths here when setting up PC1
     conda_env: "py311_26v1"
     paths:
-      data_root: null
+      master_data_path: null
+      aux_data_path: null
   PC2:
     # Linux server (carfax shared)
     conda_env: "carfax26v1"
     paths:
-      data_root: "/home/carfax_shared/data/2026_Dmodel_data"
+      master_data_path: "/home/carfax_shared/data/2026_Dmodel_data"
+      aux_data_path: "/home/carfax_shared/data/2026_Dmodel_data"
   PC3:
-    # Windows - Machine Learning Development local development under user aps
+    # Mac - Machine Learning Development local development under user aps
     conda_env: "py311_26v1"
     paths:
-      data_root: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
+      master_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
+      aux_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
   PC4:
     # Not configured - add your paths here when setting up PC4
     conda_env: "py311_26v1"
     paths:
-      data_root: null
+      master_data_path: null
+      aux_data_path: null
 
 # Common paths (apply to all machines)
 paths:
