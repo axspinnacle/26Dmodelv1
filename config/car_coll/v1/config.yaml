@@ -87,12 +87,12 @@ execution:
   kernel_name: "py311_26v1"  # Jupyter kernel for papermill execution
   
   stages:
-    stage_01: true  # Data assembly
-    stage_02: true  # Data conditioning  
-    stage_03: true  # Verification
-    stage_04: true  # Model prep
-    stage_05: true  # Model training
-    stage_06: true  # SHAP dataframe
+    stage_01: false  # Data assembly
+    stage_02: false  # Data conditioning  
+    stage_03: false  # Verification
+    stage_04: false  # Model prep
+    stage_05: false  # Model training
+    stage_06: false  # SHAP dataframe
     stage_07: true   # SHAP analysis & plot from df
   
   stop_on_error: true

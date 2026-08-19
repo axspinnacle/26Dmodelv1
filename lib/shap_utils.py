@@ -40,10 +40,10 @@ def compute_shap_aggregate(shap_df, weight_col='weight'):
     return shagg, shagg_num, shagg2
 
 
-def create_residual_plot(data, feature, weight, round_value=2, print_table=False):
-    """Plot actual vs predicted by feature. Usage: fig, df = create_residual_plot(data, 'DrvAge_raw', 'weight')"""
+def create_residual_plot(data, feature, weight, round_value=2, print_table=False, dataset_label=""):
+    """Plot actual vs predicted by feature. Usage: fig, df = create_residual_plot(data, 'DrvAge_raw', 'weight', dataset_label='Train')"""
     # Aggregate by feature
-    agg_dict = {weight: 'sum', 'incurred_act': 'sum', 'incurred_pred': 'sum', 'denom': 'sum'}
+    agg_dict = {weight: 'sum', 'actual': 'sum', 'pred': 'sum'}
     x = data.groupby([feature]).agg(agg_dict).reset_index()
     x[feature] = round(x[feature], round_value)
     
@@ -51,38 +51,41 @@ def create_residual_plot(data, feature, weight, round_value=2, print_table=False
     if x.shape[0] > 50:
         x = x.groupby(pd.qcut(x[feature], q=20, duplicates='drop')).agg(agg_dict).reset_index()
     
-    # Calculate act/pred rates
-    x['act'] = x['incurred_act'] / x['denom']
-    x['pred'] = x['incurred_pred'] / x['denom']
+    # Calculate act/pred rates (using weight as denominator)
+    x['act_rate'] = x['actual'] / x[weight]
+    x['pred_rate'] = x['pred'] / x[weight]
     
     # Create plot
     fig, ax = plt.subplots(figsize=(12, 6))
     ax2 = ax.twinx()
     
-    y_max = max(x['act'].max(), x['pred'].max()) * 1.20
+    y_max = max(x['act_rate'].max(), x['pred_rate'].max()) * 1.20
     ax2.set_ylim(0, y_max)
     
     x[weight].plot.bar(stacked=False, ax=ax, alpha=0.6, color='lightblue')
-    x['act'].plot(kind='line', ax=ax2, marker='o', label='Actual', linewidth=2)
-    x['pred'].plot(kind='line', ax=ax2, marker='s', label='Predicted', linewidth=2)
+    x['act_rate'].plot(kind='line', ax=ax2, marker='o', label='Actual', linewidth=2)
+    x['pred_rate'].plot(kind='line', ax=ax2, marker='s', label='Predicted', linewidth=2)
     
     ax.set_xlabel(feature)
     ax.set_ylabel('Weight')
-    ax2.set_ylabel('Value')
+    ax2.set_ylabel('Rate')
     ax2.legend()
-    plt.title(f'Residual Plot: {feature}')
+    title = f'[{dataset_label}] Residual Plot: {feature}' if dataset_label else f'Residual Plot: {feature}'
+    plt.title(title)
     
     if print_table:
         print(f"\n{feature} Summary:")
-        print(x[[feature, weight, 'act', 'pred']].to_string(index=False))
+        print(x[[feature, weight, 'act_rate', 'pred_rate']].to_string(index=False))
     
     return fig, x
 
 
 def create_shap_range_plot(shap_df, data_df, feature, weight_field, 
                           shap_round_level=3, feature_round_to=1, 
-                          min_ntile=0, max_ntile=0, filter_used_only=False):
-    """SHAP range plot across ntiles. Usage: fig, df = create_shap_range_plot(shap_df, data_df, 'feature', 'weight')"""
+                          min_ntile=0, max_ntile=0, filter_used_only=False, dataset_label=""):
+    """SHAP range plot across ntiles. Usage: fig, df = create_shap_range_plot(shap_df, data_df, 'feature', 'weight', dataset_label='Train')"""
+    import seaborn as sns
+    
     # Combine data and SHAP
     cf_df = data_df[[feature, weight_field]].reset_index(drop=True).copy()
     cf_df.rename(columns={weight_field: 'weight'}, inplace=True)
@@ -119,42 +122,84 @@ def create_shap_range_plot(shap_df, data_df, feature, weight_field,
     cf_df3['SHAP'] = cf_df3['sp'] / cf_df3['weight']
     del cf_df3['sp'], cf_df3['weight']
     
-    # Set up for plotting
-    unique_feat_levels = sorted(cf_df3[feature].drop_duplicates().tolist())
-    ntiles = list(range(101))
+    # Set up SHAP data for plotting (fill missing ntiles)
+    unique_feat_levels = cf_df3[feature].drop_duplicates().tolist()
+    ntiles = [i for i in range(101)]
     
-    # Create full ntile grid
-    grid_data = []
-    for feat_val in unique_feat_levels:
-        for ntile in ntiles:
-            grid_data.append({feature: feat_val, 'ntile': ntile})
+    u_df = pd.DataFrame()
+    u_df[feature] = unique_feat_levels
+    u_df['key'] = 0
     
-    cf_df4 = pd.DataFrame(grid_data)
-    cf_df4 = cf_df4.merge(cf_df3, on=[feature, 'ntile'], how='left')
+    n_df = pd.DataFrame()
+    n_df['ntile'] = ntiles
+    n_df['key'] = 0
     
-    # Create plot
-    fig, ax = plt.subplots(figsize=(14, 7))
+    df_levels = u_df.merge(n_df)
+    del df_levels['key']
     
-    for feat_val in unique_feat_levels:
-        subset = cf_df4[cf_df4[feature] == feat_val]
-        ax.plot(subset['ntile'], subset['SHAP'], marker='o', label=f'{feature}={feat_val}', alpha=0.7)
+    cf_df3.sort_values(by=[feature, 'ntile'], inplace=True)
+    df_levels.sort_values(by=[feature, 'ntile'], inplace=True)
     
-    # Apply ntile filters if specified
-    if min_ntile > 0 or max_ntile > 0:
-        min_val = min_ntile if min_ntile > 0 else 0
-        max_val = max_ntile if max_ntile > 0 else 100
-        ax.set_xlim(min_val, max_val)
+    df = pd.DataFrame()
+    for i in unique_feat_levels:
+        a = df_levels.loc[df_levels[feature] == i].copy()
+        b = cf_df3.loc[cf_df3[feature] == i].copy()
+        
+        # Fill upwards
+        a['ntile'] = a['ntile'].astype('int32')
+        b['ntile'] = b['ntile'].astype('int32')
+        c = pd.merge_asof(a, b, on='ntile')
+        
+        # Fill downwards
+        lowest_contrib = c['SHAP'].min()
+        c['SHAP'].fillna(lowest_contrib, inplace=True)
+        
+        df = pd.concat([df, c])
     
-    ax.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
-    ax.set_xlabel('Ntile')
-    ax.set_ylabel('Average SHAP Contribution')
-    ax.set_title(f'SHAP Contribution Range: {feature}')
-    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    ax.grid(True, alpha=0.3)
+    df.rename(columns={feature + '_x': feature}, inplace=True)
+    del df[feature + '_y']
     
-    plt.tight_layout()
+    # Apply ntile filter
+    if min_ntile == 0 and max_ntile == 0:
+        min_ntile, max_ntile = 0, 100
+    df = df.loc[(df['ntile'] >= min_ntile) & (df['ntile'] <= max_ntile)]
     
-    return fig, cf_df3
+    # Distribution data
+    a = cf_df.groupby([feature]).agg({'weight': 'sum'}).reset_index()
+    b = cf_df.loc[cf_df['contrib'].fillna(0) != 0].groupby([feature]).agg({'weight': 'sum'}).reset_index()
+    b.rename(columns={'weight': 'used_weight'}, inplace=True)
+    
+    c = a.merge(b, how='left')
+    c[feature] = round(c[feature], 4)
+    
+    # Create joint plot
+    g = sns.jointplot(x=df[feature], y=df['SHAP'], c=df['ntile'], height=12, 
+                      joint_kws={"color": None, 'cmap': 'vlag'})
+    
+    g.fig.colorbar(g.ax_joint.collections[0], ax=[g.ax_joint, g.ax_marg_y, g.ax_marg_x], 
+                   use_gridspec=True, orientation='vertical', shrink=.80, anchor=(0, 0), 
+                   label='SHAP Percentile', pad=-.15)
+    
+    g.fig.set_figwidth(12)
+    g.fig.set_figheight(8)
+    
+    g.ax_marg_x.remove()
+    g.ax_marg_y.remove()
+    
+    # Add dataset label to title
+    title = f'[{dataset_label}] Continuous Feature SHAP Spread Plot; {feature}' if dataset_label else f'Continuous Feature SHAP Spread Plot; {feature}'
+    g.fig.suptitle(title, y=.9)
+    
+    # Store the main figure
+    main_fig = g.fig
+    
+    # Create weight distribution bar chart
+    fig2, ax = plt.subplots(figsize=(12, 2))
+    sns.barplot(data=c, x=c[feature], y=c['weight'], color='grey', alpha=.3, ax=ax)
+    sns.barplot(data=c, x=c[feature], y=c['used_weight'], color='orange', alpha=.2, ax=ax)
+    ax.set(xlabel=None, ylabel=None)
+    
+    return main_fig, cf_df3
 
 
 def create_feature_importance_plot(shagg_df, top_n=20):
