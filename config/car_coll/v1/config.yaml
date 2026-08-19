@@ -5,7 +5,7 @@ experiment:
   name: "car_bi_v1"
   description: "Car body injury model - baseline"
   target: "pp_bi"
-  exposure: "ee_bi"
+  exposure: "ee_bi_imps"
   coverage: "coll"
 
 # Debug levels: 1=fold1, 2=folds1-2, 3=folds1-5, 0=production
@@ -68,13 +68,15 @@ features:
 xgboost:
   objective: "reg:tweedie"
   tweedie_variance_power: 1.5
+  eval_metric: "tweedie-nloglik"
   learning_rate: 0.05
   max_depth: 4
   min_child_weight: 1000
   subsample: 1.0
   colsample_bytree: 1.0
   alpha: 10
-  n_estimators: 5000
+  n_estimators: 500
+  early_stopping_rounds: 50  # Stop if no improvement for 50 iterations
   tree_method: "hist"
   device: "cpu"
   random_state: 42
@@ -85,12 +87,12 @@ execution:
   kernel_name: "py311_26v1"  # Jupyter kernel for papermill execution
   
   stages:
-    stage_01: false  # Data assembly
-    stage_02: false  # Data conditioning  
-    stage_03: false  # Verification
-    stage_04: false  # Model prep
-    stage_05: false  # Model training
-    stage_06: false  # SHAP dataframe
+    stage_01: true  # Data assembly
+    stage_02: true  # Data conditioning  
+    stage_03: true  # Verification
+    stage_04: true  # Model prep
+    stage_05: true  # Model training
+    stage_06: true  # SHAP dataframe
     stage_07: true   # SHAP analysis & plot from df
   
   stop_on_error: true

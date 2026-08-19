@@ -95,7 +95,7 @@ cef_first_sev_prob_ind,vehicle_history,0-1,First severe problem indicator
 cef_lien_holder_ind,ownership,0-1,Lien holder indicator
 vin_date,join_key,N/A,Join key for master-aux merge
 pp_bi,target,N/A,Pure premium bodily injury (target variable)
-ee_bi,exposure,N/A,Earned exposure for bodily injury (weight column)
+ee_bi_imps,exposure,N/A,Earned exposure for bodily injury (weight column)
 fold,metadata,1-6,Fold number for train/test split
 vin,metadata,N/A,Vehicle identification number (may be needed for joins/tracking)
 superpolicy_id,metadata,N/A,Super policy identifier

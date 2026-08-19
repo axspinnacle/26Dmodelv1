@@ -1,6 +1,7 @@
 # IDE and machine-specific files
 .clinerules
 current.pc
+.python-version
 .vscode/
 
 # Python
