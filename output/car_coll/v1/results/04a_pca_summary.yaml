@@ -1,43 +1,20 @@
 enabled: true
 groups:
   veh_char:
-    cumulative_variance: 0.9510853713656119
+    cumulative_variance: 0.5187220082312926
     feature_names:
     - pca_veh_char_0
     - pca_veh_char_1
     - pca_veh_char_2
     - pca_veh_char_3
     - pca_veh_char_4
-    - pca_veh_char_5
-    - pca_veh_char_6
-    - pca_veh_char_7
-    - pca_veh_char_8
-    - pca_veh_char_9
-    - pca_veh_char_10
-    - pca_veh_char_11
-    - pca_veh_char_12
-    - pca_veh_char_13
-    - pca_veh_char_14
-    - pca_veh_char_15
-    - pca_veh_char_16
-    - pca_veh_char_17
-    - pca_veh_char_18
-    - pca_veh_char_19
-    - pca_veh_char_20
-    - pca_veh_char_21
-    - pca_veh_char_22
-    - pca_veh_char_23
-    - pca_veh_char_24
-    - pca_veh_char_25
-    - pca_veh_char_26
-    - pca_veh_char_27
-    - pca_veh_char_28
-    - pca_veh_char_29
-    - pca_veh_char_30
-    - pca_veh_char_31
-    n_components: 32
+    n_components: 5
   veh_hist:
-    cumulative_variance: 0.9854239776702237
+    cumulative_variance: 0.9638975871622483
     feature_names:
     - pca_veh_hist_0
-    n_components: 1
+    - pca_veh_hist_1
+    - pca_veh_hist_2
+    - pca_veh_hist_3
+    - pca_veh_hist_4
+    n_components: 5

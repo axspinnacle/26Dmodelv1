@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 
 def load_pca_config(pca_cfg, config_path):
@@ -27,6 +28,10 @@ def apply_pca_to_group(data, columns, variance_threshold=0.95, max_components=No
         raise ValueError(f"Only {len(non_constant_cols)} non-constant columns")
     X = X[non_constant_cols]
     
+    # Standardize features (mean=0, std=1) before PCA
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
     # Determine n_components: use max_components if set, otherwise variance_threshold
     if max_components is not None:
         n_components = min(max_components, len(non_constant_cols))
@@ -34,7 +39,7 @@ def apply_pca_to_group(data, columns, variance_threshold=0.95, max_components=No
         n_components = variance_threshold
     
     pca = PCA(n_components=n_components, random_state=42)
-    X_pca = pca.fit_transform(X)
+    X_pca = pca.fit_transform(X_scaled)
     return pca, X_pca, non_constant_cols
 
 
