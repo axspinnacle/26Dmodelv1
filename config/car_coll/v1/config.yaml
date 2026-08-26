@@ -68,6 +68,15 @@ features:
   exclusion_file: null                      # Optional: columns to exclude
   blank_file: null                          # Optional: columns to treat as blank
 
+# PCA Feature Engineering Configuration
+feature_engineering:
+  pca:
+    enabled: true                           # Toggle PCA feature engineering on/off
+    features_file: "pca_features.csv"       # CSV with column_name, pca_group, notes
+    group_column: "pca_group"               # Column name containing group tags
+    variance_threshold: 0.95                # Keep components explaining 95% variance
+    prefix_template: "pca_{group}_"         # {group} replaced with group name (e.g., pca_veh_char_0)
+
 # XGBoost parameters
 xgboost:
   objective: "reg:tweedie"
@@ -91,12 +100,13 @@ execution:
   kernel_name: "py311_26v1"  # Jupyter kernel for papermill execution
   
   stages:
-    stage_01: true  # Data assembly
-    stage_02: true  # Data conditioning  
-    stage_03: true  # Verification
-    stage_04: true  # Model prep
-    stage_05: true  # Model training
-    stage_06: true  # SHAP dataframe
+    stage_01: true   # Data assembly
+    stage_02: true   # Data conditioning  
+    stage_03: true   # Verification
+    stage_04a: true  # PCA feature engineering
+    stage_04: true   # Model prep
+    stage_05: true   # Model training
+    stage_06: true   # SHAP dataframe
     stage_07: true   # SHAP analysis & plot from df
   
   stop_on_error: true
