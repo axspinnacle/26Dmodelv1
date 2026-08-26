@@ -74,7 +74,8 @@ feature_engineering:
     enabled: true                           # Toggle PCA feature engineering on/off
     features_file: "pca_features.csv"       # CSV with column_name, pca_group, notes
     group_column: "pca_group"               # Column name containing group tags
-    variance_threshold: 0.95                # Keep components explaining 95% variance
+    max_components: 5                       # Maximum components per group (takes priority if set)
+    variance_threshold: 0.95                # Keep components explaining 95% variance (fallback if max_components not set)
     prefix_template: "pca_{group}_"         # {group} replaced with group name (e.g., pca_veh_char_0)
 
 # XGBoost parameters

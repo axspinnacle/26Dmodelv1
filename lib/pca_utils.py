@@ -9,13 +9,13 @@ from sklearn.decomposition import PCA
 def load_pca_config(pca_cfg, config_path):
     """Load PCA feature groups from CSV"""
     pca_features_file = f"{config_path}/{pca_cfg['features_file']}"
-    pca_df = pd.read_csv(pca_features_file, comment='#')
+    pca_df = pd.read_csv(pca_features_file, comment='#', encoding='latin-1')
     group_col = pca_cfg['group_column']
     pca_groups = pca_df[pca_df[group_col].notna() & (pca_df[group_col] != '')][group_col].unique()
     return pca_df, sorted(pca_groups), group_col
 
 
-def apply_pca_to_group(data, columns, variance_threshold=0.95):
+def apply_pca_to_group(data, columns, variance_threshold=0.95, max_components=None):
     """Apply PCA to a set of columns"""
     cols_available = [c for c in columns if c in data.columns]
     if len(cols_available) < 2:
@@ -26,7 +26,14 @@ def apply_pca_to_group(data, columns, variance_threshold=0.95):
     if len(non_constant_cols) < 2:
         raise ValueError(f"Only {len(non_constant_cols)} non-constant columns")
     X = X[non_constant_cols]
-    pca = PCA(n_components=variance_threshold, random_state=42)
+    
+    # Determine n_components: use max_components if set, otherwise variance_threshold
+    if max_components is not None:
+        n_components = min(max_components, len(non_constant_cols))
+    else:
+        n_components = variance_threshold
+    
+    pca = PCA(n_components=n_components, random_state=42)
     X_pca = pca.fit_transform(X)
     return pca, X_pca, non_constant_cols
 
@@ -35,15 +42,25 @@ def apply_pca_groups(data, pca_cfg, config_path):
     """Apply PCA to all configured groups"""
     pca_df, pca_groups, group_col = load_pca_config(pca_cfg, config_path)
     variance_threshold = pca_cfg.get('variance_threshold', 0.95)
+    max_components = pca_cfg.get('max_components', None)
     prefix_template = pca_cfg.get('prefix_template', 'pca_{group}_')
     pca_results = {}
     all_pca_features = pd.DataFrame()
+    
+    # Print configuration
     print(f"\nApplying PCA to {len(pca_groups)} groups...")
+    if max_components is not None:
+        print(f"  Max components per group: {max_components}")
+    else:
+        print(f"  Variance threshold: {variance_threshold}")
+    
     for group in pca_groups:
         print(f"\n{'='*60}\nPCA Group: {group}\n{'='*60}")
         cols = pca_df[pca_df[group_col] == group]['column_name'].tolist()
         try:
-            pca, X_pca, feature_columns = apply_pca_to_group(data, cols, variance_threshold)
+            pca, X_pca, feature_columns = apply_pca_to_group(
+                data, cols, variance_threshold, max_components
+            )
             n_components = pca.n_components_
             explained_var = pca.explained_variance_ratio_
             cumulative_var = np.cumsum(explained_var)
