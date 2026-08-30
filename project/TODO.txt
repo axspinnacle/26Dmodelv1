@@ -1,0 +1,8 @@
+10. Show results from two blocks in PCA - Done
+20. convert categorical to numerical - 
+30. add monotonocity 
+40. add initial, hyperparameter 
+50. add final 
+60. add state level lift charts 
+70. run for 10% data for multiple veh types 
+80. make sure everything is running with 10% data 

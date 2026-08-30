@@ -6,11 +6,11 @@ Shape: (5424070, 112)
 Rows: 5,424,070
 Columns: 112
 
-Target: pp_bi
-  Mean: 230.0264
-  Std: 20755.8031
+Target: pp_coll
+  Mean: 243.7734
+  Std: 9692.1082
   Min: 0.0000
-  Max: 25188672.8125
+  Max: 9582465.4500
 
 Fold distribution:
   Fold 1: 2,716,120

@@ -4,8 +4,8 @@
 experiment:
   name: "car_bi_v1"
   description: "Car body injury model - baseline"
-  target: "pp_bi"
-  exposure: "ee_bi_imps"
+  target: "pp_coll"
+  exposure: "ee_coll_imps"
   coverage: "coll"
 
 # Debug levels: 1=fold1, 2=folds1-2, 3=folds1-5, 0=production
