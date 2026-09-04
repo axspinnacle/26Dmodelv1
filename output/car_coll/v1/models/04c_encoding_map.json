@@ -1,0 +1,518 @@
+{
+  "NumMinAcc_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0.0",
+      "1.0",
+      "2.0",
+      "3.0",
+      "4.0",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "NumMinAcc_raw_0.0",
+      "NumMinAcc_raw_1.0",
+      "NumMinAcc_raw_2.0",
+      "NumMinAcc_raw_3.0",
+      "NumMinAcc_raw_4.0",
+      "NumMinAcc_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "NumMajinAcc_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0.0",
+      "1.0",
+      "2.0",
+      "3.0",
+      "4.0",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "NumMajinAcc_raw_0.0",
+      "NumMajinAcc_raw_1.0",
+      "NumMajinAcc_raw_2.0",
+      "NumMajinAcc_raw_3.0",
+      "NumMajinAcc_raw_4.0",
+      "NumMajinAcc_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "NumSpdViol_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0.0",
+      "1.0",
+      "2.0",
+      "3.0",
+      "4.0",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "NumSpdViol_raw_0.0",
+      "NumSpdViol_raw_1.0",
+      "NumSpdViol_raw_2.0",
+      "NumSpdViol_raw_3.0",
+      "NumSpdViol_raw_4.0",
+      "NumSpdViol_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "NumMinViol_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0.0",
+      "1.0",
+      "2.0",
+      "3.0",
+      "4.0",
+      "5.0",
+      "6.0",
+      "7.0",
+      "8.0",
+      "9.0",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "NumMinViol_raw_0.0",
+      "NumMinViol_raw_1.0",
+      "NumMinViol_raw_2.0",
+      "NumMinViol_raw_3.0",
+      "NumMinViol_raw_4.0",
+      "NumMinViol_raw_5.0",
+      "NumMinViol_raw_6.0",
+      "NumMinViol_raw_7.0",
+      "NumMinViol_raw_8.0",
+      "NumMinViol_raw_9.0",
+      "NumMinViol_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "NumMajViol_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0.0",
+      "1.0",
+      "2.0",
+      "3.0",
+      "4.0",
+      "5.0",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "NumMajViol_raw_0.0",
+      "NumMajViol_raw_1.0",
+      "NumMajViol_raw_2.0",
+      "NumMajViol_raw_3.0",
+      "NumMajViol_raw_4.0",
+      "NumMajViol_raw_5.0",
+      "NumMajViol_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_active_collision_avoidance_system_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_active_collision_avoidance_system_raw_0",
+      "vc_active_collision_avoidance_system_raw_3",
+      "vc_active_collision_avoidance_system_raw_5",
+      "vc_active_collision_avoidance_system_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_active_driving_assistance_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_active_driving_assistance_raw_0",
+      "vc_active_driving_assistance_raw_3",
+      "vc_active_driving_assistance_raw_5",
+      "vc_active_driving_assistance_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_active_parking_assistance_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_active_parking_assistance_raw_0",
+      "vc_active_parking_assistance_raw_3",
+      "vc_active_parking_assistance_raw_5",
+      "vc_active_parking_assistance_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_adaptive_cruise_control_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_adaptive_cruise_control_raw_0",
+      "vc_adaptive_cruise_control_raw_3",
+      "vc_adaptive_cruise_control_raw_5",
+      "vc_adaptive_cruise_control_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_audible_forward_collision_warning_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_audible_forward_collision_warning_raw_0",
+      "vc_audible_forward_collision_warning_raw_3",
+      "vc_audible_forward_collision_warning_raw_5",
+      "vc_audible_forward_collision_warning_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_auto_dimming_rearview_mirror_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_auto_dimming_rearview_mirror_raw_0",
+      "vc_auto_dimming_rearview_mirror_raw_3",
+      "vc_auto_dimming_rearview_mirror_raw_5",
+      "vc_auto_dimming_rearview_mirror_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_auto_start_stop_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_auto_start_stop_raw_0",
+      "vc_auto_start_stop_raw_3",
+      "vc_auto_start_stop_raw_5",
+      "vc_auto_start_stop_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_automatic_emergency_braking_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_automatic_emergency_braking_raw_0",
+      "vc_automatic_emergency_braking_raw_3",
+      "vc_automatic_emergency_braking_raw_5",
+      "vc_automatic_emergency_braking_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_backup_camera_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_backup_camera_raw_0",
+      "vc_backup_camera_raw_3",
+      "vc_backup_camera_raw_5",
+      "vc_backup_camera_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_camera_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_camera_raw_0",
+      "vc_camera_raw_3",
+      "vc_camera_raw_5",
+      "vc_camera_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_driver_attention_system_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_driver_attention_system_raw_0",
+      "vc_driver_attention_system_raw_3",
+      "vc_driver_attention_system_raw_5",
+      "vc_driver_attention_system_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_electronic_braking_system_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_electronic_braking_system_raw_0",
+      "vc_electronic_braking_system_raw_3",
+      "vc_electronic_braking_system_raw_5",
+      "vc_electronic_braking_system_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_forward_automatic_emergency_braking_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_forward_automatic_emergency_braking_raw_0",
+      "vc_forward_automatic_emergency_braking_raw_3",
+      "vc_forward_automatic_emergency_braking_raw_5",
+      "vc_forward_automatic_emergency_braking_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_forward_collision_warning_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_forward_collision_warning_raw_0",
+      "vc_forward_collision_warning_raw_3",
+      "vc_forward_collision_warning_raw_5",
+      "vc_forward_collision_warning_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_hill_ascent_assist_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_hill_ascent_assist_raw_0",
+      "vc_hill_ascent_assist_raw_3",
+      "vc_hill_ascent_assist_raw_5",
+      "vc_hill_ascent_assist_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_passive_collision_avoidance_system_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_passive_collision_avoidance_system_raw_0",
+      "vc_passive_collision_avoidance_system_raw_3",
+      "vc_passive_collision_avoidance_system_raw_5",
+      "vc_passive_collision_avoidance_system_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_pedestrian_detection_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_pedestrian_detection_raw_0",
+      "vc_pedestrian_detection_raw_3",
+      "vc_pedestrian_detection_raw_5",
+      "vc_pedestrian_detection_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_power_sunroof_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_power_sunroof_raw_0",
+      "vc_power_sunroof_raw_3",
+      "vc_power_sunroof_raw_5",
+      "vc_power_sunroof_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_rear_wiper_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_rear_wiper_raw_0",
+      "vc_rear_wiper_raw_3",
+      "vc_rear_wiper_raw_5",
+      "vc_rear_wiper_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_remote_engine_start_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_remote_engine_start_raw_0",
+      "vc_remote_engine_start_raw_3",
+      "vc_remote_engine_start_raw_5",
+      "vc_remote_engine_start_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_sunroof_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_sunroof_raw_0",
+      "vc_sunroof_raw_3",
+      "vc_sunroof_raw_5",
+      "vc_sunroof_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_surround_sound_raw": {
+    "type": "one_hot",
+    "categories": [
+      "1",
+      "3",
+      "4",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_surround_sound_raw_1",
+      "vc_surround_sound_raw_3",
+      "vc_surround_sound_raw_4",
+      "vc_surround_sound_raw_5",
+      "vc_surround_sound_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_tinted_windows_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_tinted_windows_raw_0",
+      "vc_tinted_windows_raw_3",
+      "vc_tinted_windows_raw_5",
+      "vc_tinted_windows_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_touch_screen_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "4",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_touch_screen_raw_0",
+      "vc_touch_screen_raw_3",
+      "vc_touch_screen_raw_4",
+      "vc_touch_screen_raw_5",
+      "vc_touch_screen_raw___OTHER__"
+    ],
+    "has_grouping": false
+  },
+  "vc_visual_forward_collision_warning_raw": {
+    "type": "one_hot",
+    "categories": [
+      "0",
+      "3",
+      "5",
+      "__OTHER__"
+    ],
+    "feature_names": [
+      "vc_visual_forward_collision_warning_raw_0",
+      "vc_visual_forward_collision_warning_raw_3",
+      "vc_visual_forward_collision_warning_raw_5",
+      "vc_visual_forward_collision_warning_raw___OTHER__"
+    ],
+    "has_grouping": false
+  }
+}

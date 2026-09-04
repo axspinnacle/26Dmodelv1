@@ -101,11 +101,12 @@ execution:
   kernel_name: "py311_26v1"  # Jupyter kernel for papermill execution
   
   stages:
-    stage_01: true   # Data assembly
-    stage_02: true   # Data conditioning  
-    stage_03: true   # Verification
-    stage_04a: true  # PCA feature engineering
-    stage_04: true   # Model prep
+    stage_01: false   # Data assembly
+    stage_02: false   # Data conditioning  
+    stage_03: false   # Verification
+    stage_04a: false  # PCA feature engineering
+    stage_04: true   # Model prep (train/test split)
+    stage_04c: true  # Feature encoding
     stage_05: true   # Model training
     stage_06: true   # SHAP dataframe
     stage_07: true   # SHAP analysis & plot from df
