@@ -1,0 +1,5 @@
+mae: 401.44145365210267
+n_rows: 5517362
+n_rows_with_nan: 2595600
+rmse: 2669.4688938325885
+score_name: holdout

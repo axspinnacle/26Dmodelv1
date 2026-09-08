@@ -7,16 +7,28 @@ experiment:
   target: "pp_coll"
   exposure: "ee_coll_imps"
   coverage: "coll"
+  vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
 
-# Debug levels: 1=fold1, 2=folds1-2, 3=folds1-5, 0=production
-debug:
-  level: 1              # Start with fold 1 for fast testing
-  test_fold: 6          # Always use fold 6 for test
-  fold_mapping:
-    1: [1]              # Debug 1: just fold 1
-    2: [1, 2]           # Debug 2: folds 1-2
-    3: [1, 2, 3, 4, 5]  # Debug 3: all training folds
-    0: [1, 2, 3, 4, 5]  # Production: all training folds
+# Run mode configuration
+run_mode: "debug1"  # "debug1", "debug2", or "prod"
+
+debug1:
+  train_folds: [1]
+  test_folds: [6]
+  holdout_folds: []       # Skip holdout
+  hpo_trials: 10
+
+debug2:
+  train_folds: [1, 2]
+  test_folds: [6, 7]      # Test on multiple folds
+  holdout_folds: [8]      # Test holdout logic with one fold
+  hpo_trials: 20
+
+prod:
+  train_folds: [1, 2, 3, 4, 5]
+  test_folds: [6]
+  holdout_folds: [8, 9, 10]
+  hpo_trials: 100
 
 # Machine-specific configuration (selected automatically based on current.pc file)
 # The current.pc file contains a number (1-4) that determines which machine config to use
@@ -27,32 +39,33 @@ machines:
     paths:
       master_data_path: null
       aux_data_path: null
+      output_path: null
   PC2:
     # Linux server (carfax shared)
     conda_env: "carfax26v1"
     paths:
       master_data_path: "/home/carfax_shared/data/2026_Dmodel_data"
       aux_data_path: "/home/carfax_shared/data/2026_Dmodel_data"
+      output_path: "/home/carfax_shared/data/2026_Dmodel_data"  # TODO: Change to output folder after testing
   PC3:
     # Mac - Machine Learning Development local development under user aps
     conda_env: "py311_26v1"
     paths:
       master_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
       aux_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
+      output_path: "output/car_coll/v1"  # Relative to project root
   PC4:
     # Not configured - add your paths here when setting up PC4
     conda_env: "py311_26v1"
     paths:
       master_data_path: null
       aux_data_path: null
+      output_path: null
 
-# Common paths (apply to all machines)
-paths:
-  output_base: "output/car_coll/v1"
-  
-# Data sources
+# Input data files (machine-agnostic file names)
 # NOTE: Master file does NOT have fold - must join with aux file
 # Aux file contains fold and depreciation factors
+# Actual paths are in machines.PCX.paths section above
 data:
   master_file: "master_dataset_car.parquet"
   aux_file: "car_with_dep_factor_fold.parquet"
@@ -60,13 +73,15 @@ data:
   fold_column: "fold"   # Column in AUX file only
   join_type: "inner"    # Inner join to keep only matched records
   columns_to_load_file: "columns_to_load_during_dataassembly.csv"  # Subset of columns to load (performance)
+  control_model_file: "aux_dataset_car_vindate_ctl.parquet"  # GLM predictions for base_margin
   
 # Feature configuration
 # Features loaded from CSV file with category/range metadata
 features:
   inclusion_file: "columns_inclusion.csv"  # 90 features from CSV
-  exclusion_file: null                      # Optional: columns to exclude
+  exclusion_file: "exclusion.csv"          # Features to exclude per vehicle type
   blank_file: null                          # Optional: columns to treat as blank
+  monotonicity_file: "monotonicity.csv"     # Monotonicity constraints per vehicle type
 
 # PCA Feature Engineering Configuration
 feature_engineering:
@@ -77,6 +92,11 @@ feature_engineering:
     max_components: 5                       # Maximum components per group (takes priority if set)
     variance_threshold: 0.95                # Keep components explaining 95% variance (fallback if max_components not set)
     prefix_template: "pca_{group}_"         # {group} replaced with group name (e.g., pca_veh_char_0)
+
+# Model configuration
+model:
+  use_glm_init: true                # Use GLM predictions as base_margin
+  glm_init_transform: "log"         # "log" or "raw" - transform GLM predictions
 
 # XGBoost parameters
 xgboost:
@@ -105,14 +125,60 @@ execution:
     stage_02: false   # Data conditioning  
     stage_03: false   # Verification
     stage_04a: false  # PCA feature engineering
-    stage_04: true   # Model prep (train/test split)
-    stage_04c: true  # Feature encoding
-    stage_05: true   # Model training
-    stage_06: true   # SHAP dataframe
-    stage_07: true   # SHAP analysis & plot from df
+    stage_04b: false   # Train/test split by fold
+    stage_04c: false   # Feature encoding + model prep
+    stage_05a: false   # Initial model fit (validation)
+    stage_05b: false   # Hyperparameter optimization
+    stage_05c: false   # Production model training
+    stage_06: false    # SHAP dataframe
+    stage_07: false    # SHAP analysis & plot from df
+    stage_08: true    # Scoring (holdout/new data)
+    stage_09: true    # State analysis
   
   stop_on_error: true
   cleanup_memory: true
+
+# Hyperparameter Optimization Configuration
+hyperparameter_optimization:
+  method: "grid"             # "grid" (default, no extra deps) or "optuna" (optional)
+  n_trials: 100              # For optuna (if method="optuna")
+  timeout_minutes: 60        # Max time for optuna
+  param_grid:                # For grid search
+    max_depth: [3, 4, 5, 6]
+    learning_rate: [0.01, 0.05, 0.1]
+    min_child_weight: [500, 1000, 2000]
+    subsample: [0.8, 1.0]
+    colsample_bytree: [0.8, 1.0]
+  scoring:                   # Actuarial lift optimization scoring
+    bins: 10                 # Number of deciles for lift calculation
+    fit_threshold: 0.70      # Minimum acceptable fit quality (0-1)
+    steepness: 20.0          # Sigmoid penalty sharpness below threshold
+    power_weight: 0.25       # Weight of model_power in combined score
+    power_norm_cap: 0.50     # Normalization cap for model_power
+
+# Scoring Configuration (holdout, new data, production)
+scoring:
+  holdout:
+    source: "master"          # Use master file with fold filter
+    folds: [8, 9, 10]
+    has_target: true
+  # Example for new year data:
+  # year_2025:
+  #   source: "file"
+  #   data_dir: "/path/to/data"  # Optional, defaults to master_data_path
+  #   file: "data_2025.parquet"
+  #   has_target: true
+
+# State Analysis Configuration
+analysis:
+  slice_by: ["state"]         # Dimensions to slice by
+  datasets:
+    - name: "train"
+      file: "results/05c_predictions_train.parquet"
+    - name: "test"
+      file: "results/05c_predictions_test.parquet"
+    - name: "holdout"
+      file: "scoring/holdout/predictions.parquet"
 
 # SHAP Analysis Configuration
 shap_analysis:

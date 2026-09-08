@@ -45,7 +45,7 @@ def set_data_paths(data_root: str):
     global TRAIN_PATH, TEST_PATH
     TRAIN_PATH = os.path.join(data_root, "train_combined.parquet")
     TEST_PATH = os.path.join(data_root, "test_combined.parquet")
-    print(f"✓ Data paths configured:")
+    print(f"[OK] Data paths configured:")
     print(f"  TRAIN: {TRAIN_PATH}")
     print(f"  TEST:  {TEST_PATH}")
 
@@ -102,13 +102,13 @@ def _load_exclusion_list() -> set:
         try:
             df = pd.read_csv(csv_path, comment='#')
             excluded = set(df["column_name"].tolist())
-            print(f"  ✓ Loaded {len(excluded)} exclusions from column_exclusions.csv")
+            print(f"  [OK] Loaded {len(excluded)} exclusions from column_exclusions.csv")
             return excluded
         except Exception as e:
-            print(f"  ⚠️  Warning: Could not load column_exclusions.csv: {e}")
+            print(f"  [!]  Warning: Could not load column_exclusions.csv: {e}")
             return set()
     else:
-        print(f"  ⚠️  Warning: column_exclusions.csv not found at {csv_path}")
+        print(f"  [!]  Warning: column_exclusions.csv not found at {csv_path}")
         return set()
 
 
@@ -132,10 +132,10 @@ def _load_inclusion_list() -> set:
             df = pd.read_csv(csv_path, comment='#')
             included = set(df["column_name"].tolist())
             print(f"  🎯 INCLUSION FILTER ACTIVE: Using ONLY {len(included)} whitelisted features")
-            print(f"     (to disable: rename columns_inclusion.csv → columns_inclusion.csv.disabled)")
+            print(f"     (to disable: rename columns_inclusion.csv -> columns_inclusion.csv.disabled)")
             return included
         except Exception as e:
-            print(f"  ⚠️  Warning: Could not load columns_inclusion.csv: {e}")
+            print(f"  [!]  Warning: Could not load columns_inclusion.csv: {e}")
             return None
     else:
         return None  # No inclusion list = use all features (except exclusions)
@@ -190,7 +190,7 @@ def load_train_only(debug: int = 1, data_root: str = None) -> pd.DataFrame:
     # Scan for potential leakage features
     scan_results = scan_for_leakage_features(train)
     if scan_results['leakers']:
-        print("⚠️  Training will proceed, but model may have DATA LEAKAGE!")
+        print("[!]  Training will proceed, but model may have DATA LEAKAGE!")
         print("   Review the scanner output above and update column_exclusions.csv\n")
     
     print(f"  Train: {len(train):,} rows")
@@ -302,7 +302,7 @@ def _is_0_5_col(s: pd.Series) -> bool:
     if not pd.api.types.is_numeric_dtype(s):
         return False
     vals = s.dropna().unique()
-    if len(vals) == 0:          # all-NaN column → not a 0-5 col
+    if len(vals) == 0:          # all-NaN column -> not a 0-5 col
         return False
     return (len(vals) <= 7) and (float(vals.min()) >= 0) and (float(vals.max()) <= 5)
 
@@ -380,7 +380,7 @@ def _fix_numeric_object_columns(df: pd.DataFrame) -> pd.DataFrame:
             converted_count += 1
     
     if converted_count > 0:
-        print(f"  ✓ Converted {converted_count} object columns to numeric (special values → NaN)")
+        print(f"  [OK] Converted {converted_count} object columns to numeric (special values -> NaN)")
     
     return df
 
@@ -456,7 +456,7 @@ def scan_parquet_schema_for_leakage(parquet_path: str = None,
             cols = by_pattern[pattern]
             excluded_count = sum(1 for c in cols if c in current_exclusions)
             leaker_count = len(cols) - excluded_count
-            status = "✅" if leaker_count == 0 else "⚠️"
+            status = "[OK]" if leaker_count == 0 else "[!]"
             print(f"  {status} '{pattern}*': {len(cols)} found "
                   f"({excluded_count} excluded, {leaker_count} leaking)")
     
@@ -468,7 +468,7 @@ def scan_parquet_schema_for_leakage(parquet_path: str = None,
         print("--- END ---")
         print("\nAfter updating CSV, re-run this cell to verify exclusions.")
     else:
-        print(f"\n✅ All suspicious columns are excluded - ready to load data!")
+        print(f"\n[OK] All suspicious columns are excluded - ready to load data!")
     
     print("="*70 + "\n")
     
@@ -542,7 +542,7 @@ def scan_for_leakage_features(df: pd.DataFrame,
             cols = by_pattern[pattern]
             excluded_count = sum(1 for c in cols if c in EXCLUDE_ALWAYS)
             leaker_count = len(cols) - excluded_count
-            status = "✅" if leaker_count == 0 else "⚠️"
+            status = "[OK]" if leaker_count == 0 else "[!]"
             print(f"  {status} '{pattern}*': {len(cols)} found "
                   f"({excluded_count} excluded, {leaker_count} leaking)")
     
@@ -553,7 +553,7 @@ def scan_for_leakage_features(df: pd.DataFrame,
         print(f"\n💡 ACTION REQUIRED: Add these to config/column_exclusions.csv")
         print("   Then re-run training to prevent data leakage!")
     else:
-        print(f"\n✅ All suspicious columns are properly excluded.")
+        print(f"\n[OK] All suspicious columns are properly excluded.")
     
     print("="*70 + "\n")
     
@@ -589,10 +589,10 @@ def _check_cardinality_safety(col_name: str, series: pd.Series,
     n_unique = series.nunique()
     if n_unique > max_unique:
         sample_vals = list(series.dropna().unique()[:5])
-        print(f"  ⚠️  SKIPPING '{col_name}': {n_unique:,} unique values "
+        print(f"  [!]  SKIPPING '{col_name}': {n_unique:,} unique values "
               f"(exceeds {max_unique} OHE limit)")
         print(f"      Sample: {sample_vals}")
-        print(f"      → Add to config/column_exclusions.csv to permanently exclude")
+        print(f"      -> Add to config/column_exclusions.csv to permanently exclude")
         return False
     return True
 

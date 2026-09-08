@@ -44,6 +44,6 @@ nb = {
 with open("templates/07_shap_analysis_COMPLETE.ipynb", "w") as f:
     json.dump(nb, f, indent=1)
 
-print(f"✅ Created: templates/07_shap_analysis_COMPLETE.ipynb")
+print(f"[OK] Created: templates/07_shap_analysis_COMPLETE.ipynb")
 print(f"   Cells: {len(cells)}")
 print("\\nNow run: python3 add_stage07_cells.py to add remaining cells")

@@ -26,7 +26,7 @@ def apply_master_encoding(train_df, test_df, config_path, min_frequency=0.01, mi
         raise FileNotFoundError(f"Master encoding file not found: {encoding_path}")
     
     encoding_df = pd.read_csv(encoding_path)
-    print(f"✓ Loaded master encoding: {len(encoding_df)} columns")
+    print(f"[OK] Loaded master encoding: {len(encoding_df)} columns")
     
     # Initialize outputs
     train_parts = []
@@ -113,13 +113,13 @@ def apply_master_encoding(train_df, test_df, config_path, min_frequency=0.01, mi
             summary_rows.append(summary)
         
         else:
-            print(f"⚠️  Unknown encoding type '{enc_type}' for column '{col}', skipping")
+            print(f"[!]  Unknown encoding type '{enc_type}' for column '{col}', skipping")
     
     train_encoded = pd.concat(train_parts, axis=1)
     test_encoded = pd.concat(test_parts, axis=1)
     encoding_summary = pd.DataFrame(summary_rows)
     
-    print(f"\n✓ Encoding complete:")
+    print(f"\n[OK] Encoding complete:")
     print(f"  Train shape: {train_encoded.shape}")
     print(f"  Test shape: {test_encoded.shape}")
     
@@ -277,12 +277,12 @@ def save_encoders(encoders, encoding_summary, output_path):
     encoders_file = models_dir / "04c_encoders.pkl"
     with open(encoders_file, 'wb') as f:
         pickle.dump(encoders, f)
-    print(f"✓ Saved encoders: {encoders_file}")
+    print(f"[OK] Saved encoders: {encoders_file}")
     
     # Save encoding summary as CSV
     summary_file = results_dir / "04c_encoding_summary.csv"
     encoding_summary.to_csv(summary_file, index=False)
-    print(f"✓ Saved encoding summary: {summary_file}")
+    print(f"[OK] Saved encoding summary: {summary_file}")
     
     # Save human-readable mapping as JSON
     mapping_file = models_dir / "04c_encoding_map.json"
@@ -298,7 +298,7 @@ def save_encoders(encoders, encoding_summary, output_path):
     
     with open(mapping_file, 'w') as f:
         json.dump(mapping_dict, f, indent=2)
-    print(f"✓ Saved encoding map: {mapping_file}")
+    print(f"[OK] Saved encoding map: {mapping_file}")
 
 
 def load_encoders(output_path):
@@ -313,8 +313,8 @@ def load_encoders(output_path):
     
     encoding_summary = pd.read_csv(summary_file)
     
-    print(f"✓ Loaded encoders: {len(encoders)} columns")
-    print(f"✓ Loaded summary: {len(encoding_summary)} rows")
+    print(f"[OK] Loaded encoders: {len(encoders)} columns")
+    print(f"[OK] Loaded summary: {len(encoding_summary)} rows")
     
     return encoders, encoding_summary
 
@@ -331,7 +331,7 @@ def apply_saved_encoders(data_df, encoders, encoding_summary):
             continue
         
         if col not in data_df.columns:
-            print(f"⚠️  Column '{col}' not in data, skipping")
+            print(f"[!]  Column '{col}' not in data, skipping")
             continue
         
         if enc_type in ['numeric', 'ordinal_0_5', 'binary', 'remap_2to4_then_ordinal']:
@@ -339,7 +339,7 @@ def apply_saved_encoders(data_df, encoders, encoding_summary):
         
         elif enc_type in ['one_hot', 'group_then_ohe', 'remap_2to4_then_ohe']:
             if col not in encoders:
-                print(f"⚠️  No encoder found for '{col}', skipping")
+                print(f"[!]  No encoder found for '{col}', skipping")
                 continue
             
             enc_obj = encoders[col]
@@ -379,6 +379,6 @@ def apply_saved_encoders(data_df, encoders, encoding_summary):
             encoded_parts.append(encoded_df)
     
     result = pd.concat(encoded_parts, axis=1)
-    print(f"✓ Applied saved encoders: {result.shape}")
+    print(f"[OK] Applied saved encoders: {result.shape}")
     return result
 

@@ -118,5 +118,5 @@ notebook['cells'] = new_cells
 with open(template_path, 'w') as f:
     json.dump(notebook, f, indent=1)
 
-print(f"✅ Updated {template_path}")
+print(f"[OK] Updated {template_path}")
 print(f"   Created {len(new_cells)} cells so far")

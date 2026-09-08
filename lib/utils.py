@@ -149,5 +149,5 @@ def validate_critical_columns(df, cfg, stage_name, check_nulls=True):
                 null_pct = null_count / len(df) * 100
                 print(f"[{stage_name}] WARNING: {col} has {null_count:,} nulls ({null_pct:.1f}%)")
     
-    print(f"[{stage_name}] ✓ Critical columns validated: {', '.join(critical)}")
+    print(f"[{stage_name}] [OK] Critical columns validated: {', '.join(critical)}")
     return True
