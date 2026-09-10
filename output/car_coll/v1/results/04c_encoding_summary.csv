@@ -8,10 +8,10 @@ multi_pol_yes_cal,ordinal_0_5,multi_pol_yes_cal,0,False,False
 multi_pol_unknown_cal,ordinal_0_5,multi_pol_unknown_cal,0,False,False
 gender_male_ind,ordinal_0_5,gender_male_ind,0,False,False
 married_ind,ordinal_0_5,married_ind,0,False,False
-NumMinAcc_raw,one_hot,"NumMinAcc_raw_0.0,NumMinAcc_raw_1.0,NumMinAcc_raw_2.0,NumMinAcc_raw_3.0,NumMinAcc_raw_4.0,NumMinAcc_raw___OTHER__",6,True,False
+NumMinAcc_raw,one_hot,"NumMinAcc_raw_0.0,NumMinAcc_raw_1.0,NumMinAcc_raw_2.0,NumMinAcc_raw_3.0,NumMinAcc_raw_4.0,NumMinAcc_raw_5.0,NumMinAcc_raw___OTHER__",7,True,False
 NumMajinAcc_raw,one_hot,"NumMajinAcc_raw_0.0,NumMajinAcc_raw_1.0,NumMajinAcc_raw_2.0,NumMajinAcc_raw_3.0,NumMajinAcc_raw_4.0,NumMajinAcc_raw___OTHER__",6,True,False
-NumSpdViol_raw,one_hot,"NumSpdViol_raw_0.0,NumSpdViol_raw_1.0,NumSpdViol_raw_2.0,NumSpdViol_raw_3.0,NumSpdViol_raw_4.0,NumSpdViol_raw___OTHER__",6,True,False
-NumMinViol_raw,one_hot,"NumMinViol_raw_0.0,NumMinViol_raw_1.0,NumMinViol_raw_2.0,NumMinViol_raw_3.0,NumMinViol_raw_4.0,NumMinViol_raw_5.0,NumMinViol_raw_6.0,NumMinViol_raw_7.0,NumMinViol_raw_8.0,NumMinViol_raw_9.0,NumMinViol_raw___OTHER__",11,True,False
+NumSpdViol_raw,one_hot,"NumSpdViol_raw_0.0,NumSpdViol_raw_1.0,NumSpdViol_raw_2.0,NumSpdViol_raw_3.0,NumSpdViol_raw_4.0,NumSpdViol_raw_5.0,NumSpdViol_raw___OTHER__",7,True,False
+NumMinViol_raw,one_hot,"NumMinViol_raw_0.0,NumMinViol_raw_1.0,NumMinViol_raw_10.0,NumMinViol_raw_2.0,NumMinViol_raw_3.0,NumMinViol_raw_4.0,NumMinViol_raw_5.0,NumMinViol_raw_6.0,NumMinViol_raw_7.0,NumMinViol_raw_8.0,NumMinViol_raw_9.0,NumMinViol_raw___OTHER__",12,True,False
 NumMajViol_raw,one_hot,"NumMajViol_raw_0.0,NumMajViol_raw_1.0,NumMajViol_raw_2.0,NumMajViol_raw_3.0,NumMajViol_raw_4.0,NumMajViol_raw_5.0,NumMajViol_raw___OTHER__",7,True,False
 driver_has_acc_any_ind,ordinal_0_5,driver_has_acc_any_ind,0,False,False
 driver_has_vio_any_ind,ordinal_0_5,driver_has_vio_any_ind,0,False,False

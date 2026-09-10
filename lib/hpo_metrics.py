@@ -137,3 +137,63 @@ def calculate_lift_opt_score(
     
     # 4. Gated final evaluation score
     return float(gate * base_score)
+
+
+def compute_fit_quality(y_true, y_pred, weights):
+    """
+    Compute fit quality from raw arrays (simpler interface for notebooks).
+    
+    Parameters
+    ----------
+    y_true : array-like
+        Actual target values
+    y_pred : array-like
+        Predicted values
+    weights : array-like
+        Sample weights (exposure)
+    
+    Returns
+    -------
+    float
+        Fit quality score (0-1, higher is better)
+    """
+    # Create dataframe for calculate_model_metrics
+    df = pd.DataFrame({
+        'act_weighted': y_true * weights,
+        'pred_weighted': y_pred * weights,
+        'pred': y_pred,
+        'weight': weights
+    })
+    
+    fit_quality, _ = calculate_model_metrics(df, 'weight', bins=10)
+    return fit_quality
+
+
+def compute_model_power(y_true, y_pred, weights):
+    """
+    Compute model power from raw arrays (simpler interface for notebooks).
+    
+    Parameters
+    ----------
+    y_true : array-like
+        Actual target values
+    y_pred : array-like
+        Predicted values
+    weights : array-like
+        Sample weights (exposure)
+    
+    Returns
+    -------
+    float
+        Model power score (0+, higher is better)
+    """
+    # Create dataframe for calculate_model_metrics
+    df = pd.DataFrame({
+        'act_weighted': y_true * weights,
+        'pred_weighted': y_pred * weights,
+        'pred': y_pred,
+        'weight': weights
+    })
+    
+    _, model_power = calculate_model_metrics(df, 'weight', bins=10)
+    return model_power
