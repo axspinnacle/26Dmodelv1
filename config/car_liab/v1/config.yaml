@@ -36,9 +36,9 @@ machines:
   PC2:
     conda_env: "carfax26v1"
     paths:
-      master_data_path: "/home/carfax_shared/data/2026_Dmodel_data"
-      aux_data_path: "/home/carfax_shared/data/2026_Dmodel_data"
-      output_path: "/home/carfax_shared/data/2026_Dmodel_data"
+      master_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
+      aux_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
+      output_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
   PC3:
     conda_env: "py311_26v1"
     paths:
