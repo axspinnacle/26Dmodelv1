@@ -1,0 +1,165 @@
+experiment:
+  name: "car_liab_v1"
+  description: "Car liability model - baseline"
+  target: "pp_bi"
+  exposure: "ee_bi_imps"
+  coverage: "liab"
+  vehicle_type: "CAR"
+
+run_mode: "debug1"
+
+debug1:
+  train_folds: [1]
+  test_folds: [6]
+  holdout_folds: [7]
+  hpo_trials: 10
+
+debug2:
+  train_folds: [1, 2]
+  test_folds: [6, 7]
+  holdout_folds: [8]
+  hpo_trials: 20
+
+prod:
+  train_folds: [1, 2, 3, 4, 5]
+  test_folds: [6,7]
+  holdout_folds: [8, 9, 10]
+  hpo_trials: 20
+
+machines:
+  PC1:
+    conda_env: "py311_26v1"
+    paths:
+      master_data_path: null
+      aux_data_path: null
+      output_path: null
+  PC2:
+    conda_env: "carfax26v1"
+    paths:
+      master_data_path: "/home/carfax_shared/data/2026_Dmodel_data"
+      aux_data_path: "/home/carfax_shared/data/2026_Dmodel_data"
+      output_path: "/home/carfax_shared/data/2026_Dmodel_data"
+  PC3:
+    conda_env: "py311_26v1"
+    paths:
+      master_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
+      aux_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
+      output_path: "output/car_liab/v1"
+  PC4:
+    conda_env: "py311_26v1"
+    paths:
+      master_data_path: null
+      aux_data_path: null
+      output_path: null
+
+data:
+  master_file: "master_dataset_car.parquet"
+  aux_file: "car_with_dep_factor_fold.parquet"
+  join_key: "vin_date"
+  fold_column: "fold"
+  join_type: "inner"
+  columns_to_load_file: "columns_to_load_during_dataassembly.csv"
+  control_model_file: "aux_dataset_car_vindate_ctl.parquet"
+  
+features:
+  inclusion_file: "columns_inclusion.csv"
+  exclusion_file: "exclusion.csv"
+  blank_file: null
+  monotonicity_file: "monotonicity.csv"
+
+feature_engineering:
+  pca:
+    enabled: true
+    features_file: "pca_features.csv"
+    group_column: "pca_group"
+    max_components: null
+    prefix: "pca_"
+
+model:
+  use_glm_init: true
+  glm_init_transform: "log"
+  glm_prediction_column: "pred_pp_liab_3p"
+
+xgboost:
+  objective: "reg:tweedie"
+  tweedie_variance_power: 1.5
+  eval_metric: "tweedie-nloglik"
+  learning_rate: 0.05
+  max_depth: 4
+  min_child_weight: 1000
+  subsample: 1.0
+  colsample_bytree: 1.0
+  alpha: 10
+  n_estimators: 500
+  early_stopping_rounds: 50
+  tree_method: "hist"
+  device: "cpu"
+  random_state: 42
+  verbosity: 1
+
+execution:
+  stages:
+    stage_01: false
+    stage_02: false
+    stage_03: false
+    stage_04a: false
+    stage_04b: false
+    stage_04c: false
+    stage_05a: false
+    stage_05b: false
+    stage_05c: false
+    stage_06: true
+    stage_07: true
+    stage_08: true
+    stage_09: true
+  
+  stop_on_error: true
+  cleanup_memory: true
+
+hyperparameter_optimization:
+  method: "grid"
+  n_trials: 100
+  timeout_minutes: 60
+  param_grid:
+    max_depth: [3, 4, 5, 6]
+    learning_rate: [0.01, 0.05, 0.1]
+    min_child_weight: [500, 1000, 2000]
+    subsample: [0.8, 1.0]
+    colsample_bytree: [0.8, 1.0]
+  scoring:
+    bins: 10
+    fit_threshold: 0.70
+    steepness: 20.0
+    power_weight: 0.25
+    power_norm_cap: 0.50
+
+scoring:
+  holdout:
+    source: "master"
+    folds: [8, 9, 10]
+    has_target: true
+
+analysis:
+  slice_by: ["state"]
+  datasets:
+    - name: "train"
+      file: "results/05c_predictions_train.parquet"
+    - name: "test"
+      file: "results/05c_predictions_test.parquet"
+    - name: "holdout"
+      file: "scoring/holdout/predictions.parquet"
+
+shap_analysis:
+  top_n_features: 40
+  datasets: ["train", "test"]
+  
+  residual_plot:
+    round_value: 2
+    print_table: true
+  
+  shap_range_plot:
+    shap_round_level: 3
+    feature_round_to: 0.001
+    min_ntile: 5
+    max_ntile: 95
+    filter_used_only: false

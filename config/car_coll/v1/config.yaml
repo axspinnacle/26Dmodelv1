@@ -10,7 +10,7 @@ experiment:
   vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
 
 # Run mode configuration
-run_mode: "prod"  # "debug1", "debug2", or "prod"
+run_mode: "debug2"  # "debug1", "debug2", or "prod"
 
 debug1:
   train_folds: [1]
@@ -44,8 +44,8 @@ machines:
     # Linux server (carfax shared)
     conda_env: "carfax26v1"
     paths:
-      master_data_path: "/home/carfax_shared/data/2026_Dmodel_data"
-      aux_data_path: "/home/carfax_shared/data/2026_Dmodel_data"
+      master_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
+      aux_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
       output_path: "/home/carfax_shared/data/2026_Dmodel_data"  # TODO: Change to output folder after testing
   PC3:
     # Mac - Machine Learning Development local development under user aps
@@ -95,8 +95,9 @@ feature_engineering:
 
 # Model configuration
 model:
-  use_glm_init: true                # Use GLM predictions as base_margin
-  glm_init_transform: "log"         # "log" or "raw" - transform GLM predictions
+  use_glm_init: true
+  glm_init_transform: "log"
+  glm_prediction_column: "pred_pp_coll"
 
 # XGBoost parameters
 xgboost:
@@ -118,8 +119,6 @@ xgboost:
 
 # Execution control
 execution:
-  kernel_name: "py311_26v1"  # Jupyter kernel for papermill execution
-  
   stages:
     stage_01: false   # Data assembly
     stage_02: false   # Data conditioning  
@@ -133,7 +132,7 @@ execution:
     stage_06: true    # SHAP dataframe
     stage_07: true    # SHAP analysis & plot from df
     stage_08: true    # Scoring (holdout/new data)
-    stage_09: true    # State analysis
+    stage_09: false    # State analysis
   
   stop_on_error: true
   cleanup_memory: true

@@ -1,6 +1,6 @@
 config_path: config/car_coll/v1
-duration_seconds: 566.185062
-end_time: '2026-09-09T14:05:33.559123'
+duration_seconds: 568.002721
+end_time: '2026-09-10T19:34:37.567527'
 experiment: car_bi_v1
 results:
   stage_01: skipped
@@ -15,5 +15,4 @@ results:
   stage_06: success
   stage_07: success
   stage_08: success
-  stage_09: failed
-start_time: '2026-09-09T13:56:07.374061'
+start_time: '2026-09-10T19:25:09.564806'

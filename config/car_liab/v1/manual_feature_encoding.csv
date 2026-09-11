@@ -1,0 +1,138 @@
+feature,liab
+vc_trailer_assist_raw,ordinal_0_5
+vc_tactile_forward_collision_warning_raw,ordinal_0_5
+vc_wipers_speed_sensitive_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_wipers_heated_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_wipers_automatic_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_traffic_sign_recognition_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_off_road_lights_raw,ordinal_0_5
+vc_power_folding_side_mirrors_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_post_crash_fuel_cutoff_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_mild_hybrid_raw,ordinal_0_5
+vc_rear_window_defogger_raw,ordinal_0_5
+vc_reverse_automatic_emergency_braking_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_video_display_raw,DROP
+vc_video_system_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_semiautomatic_parking_system_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_automatic_emergency_steering_raw,ordinal_0_5
+vc_automatic_high_beams_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_auto_dimming_side_mirrors_raw,ordinal_0_5
+vc_auto_hazard_flashers_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_auto_start_stop_raw,one_hot_encode
+vc_automatic_emergency_braking_raw,one_hot_encode
+vc_crash_sensing_door_locks_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_active_parking_assistance_raw,one_hot_encode
+vc_adaptive_cruise_control_raw,one_hot_encode
+vc_camera_front_raw,ordinal_0_5
+vc_center_locking_differential_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_camera_washer_raw,one_hot_encode
+vc_camera_side_raw,ordinal_0_5
+vc_cornering_lights_raw,one_hot_encode
+vc_cornering_brake_control_raw,ordinal_0_5
+vc_active_driving_assistance_raw,one_hot_encode
+vc_pedestrian_detection_raw,one_hot_encode
+vc_integrated_wifi_raw,ordinal_0_5
+vc_lane_keeping_assistance_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_headlights_wiper_activated_raw,ordinal_0_5
+vc_driver_attention_system_raw,one_hot_encode
+vc_glass_roof_raw,ordinal_0_5
+vc_forward_automatic_emergency_braking_raw,one_hot_encode
+vc_fog_lights_rear_raw,one_hot_encode
+vc_electronic_4wd_selector_raw,ordinal_0_5
+vc_headlights_leveling_raw,one_hot_encode
+vc_heated_steering_wheel_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_blind_spot_camera_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_heated_washer_jets_raw,ordinal_0_5
+vc_vehicle_immobilizer_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_tinted_windows_raw,one_hot_encode
+vc_speed_sensitive_volume_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_sunroof_raw,one_hot_encode
+vc_variable_power_steering_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_parking_sensors_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_parking_collision_warning_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_passive_collision_avoidance_system_raw,one_hot_encode
+vc_precollision_system_raw,ordinal_0_5
+vc_power_sunroof_raw,one_hot_encode
+vc_remote_engine_start_raw,one_hot_encode
+vc_rear_wiper_raw,one_hot_encode
+vc_rear_parking_sensors_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_rear_cross_traffic_warning_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_visual_forward_collision_warning_raw,one_hot_encode
+vc_side_mirror_turn_signals_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_navigation_touchscreen_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_backup_camera_raw,one_hot_encode
+vc_auto_dimming_rearview_mirror_raw,one_hot_encode
+vc_audible_forward_collision_warning_raw,one_hot_encode
+vc_cross_traffic_warning_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_crumple_zones_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_blind_spot_warning_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_crash_sensors_raw,one_hot_encode
+vc_active_collision_avoidance_system_raw,one_hot_encode
+vc_lane_departure_warning_raw,"binary: {0,1,2,3}->0 | {4,5}->1"
+vc_daytime_running_lights_raw,DROP
+vc_headlights_auto_on_off_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_front_parking_sensors_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_forward_collision_warning_raw,one_hot_encode
+vc_fog_lights_raw,DROP
+vc_electronic_braking_system_raw,one_hot_encode
+vc_heated_side_mirrors_raw,"binary: {0,1,2}->0 | {3,4,5}->1"
+vc_hill_ascent_assist_raw,one_hot_encode
+vc_camera_raw,one_hot_encode
+vc_instrumentation_display_cal,ordinal_0_5
+vc_infotainment_screen_cal,ordinal_0_5
+vc_side_window_defogger_raw,DROP
+vc_antitheft_key_raw,DROP
+vc_front_cross_traffic_warning_raw,ordinal_0_5
+vc_subwoofer_raw,remap_2to4_then_ordinal
+vc_premium_audio_raw,remap_2to4_then_ordinal
+vc_satellite_radio_raw,remap_2to4_then_ordinal
+vc_taillights_led_raw,remap_2to4_then_ordinal
+vc_dvd_player_raw,remap_2to4_then_ordinal
+vc_surround_sound_raw,remap_2to4_then_ohe
+vc_touch_screen_raw,remap_2to4_then_ohe
+vc_softtop_raw,remap_2to4_then_ohe
+vc_aspiration_raw,one_hot_encode
+vehicle_use_raw,group_then_ohe
+owt_current_ownership_type_raw,group_then_ohe
+vc_fuel_type_raw,group_then_ohe
+dml_body_style_raw,group_then_ohe
+st_raw,one_hot_encode
+insstate,DROP
+dml_make_raw,group_then_ohe
+vc_acceleration_0_60_raw,numeric
+vc_automatic_crash_notification_raw,numeric
+vc_bed_length_raw,numeric
+vc_cargo_van_raw,numeric
+vc_curb_weight_raw,numeric
+vc_cylinders_raw,numeric
+vc_displacement_raw,numeric
+vc_doors_raw,numeric
+vc_engine_valves_raw,numeric
+vc_fuel_tank_capacity_raw,numeric
+vc_gross_combined_weight_raw,numeric
+vc_ground_clearance_raw,numeric
+vc_height_raw,numeric
+vc_horsepower_raw,numeric
+vc_interior_volume_raw,numeric
+vc_length_raw,numeric
+vc_msrp_raw,numeric
+vc_passenger_volume_raw,numeric
+vc_payload_capacity_raw,numeric
+vc_premium_wheels_raw,numeric
+vc_rear_wiper_automatic_raw,numeric
+vc_seating_capacity_raw,numeric
+vc_seating_rows_raw,numeric
+vc_torque_raw,numeric
+vc_towing_capacity_raw,numeric
+vc_turning_circle_raw,numeric
+vc_wheelbase_raw,numeric
+vc_width_raw,numeric
+vc_derived_hp_to_volume_cal,numeric
+vc_derived_hp_to_density_cal,numeric
+vc_derived_hp_to_turn_cal,numeric
+vc_derived_hp_to_weight_cal,numeric
+vc_derived_turn_to_length_cal,numeric
+vc_derived_turn_to_width_cal,numeric
+vc_derived_length_to_rows_cal,numeric
+vc_derived_stability_val_cal,numeric
+vc_derived_rollover_risk_cal,numeric
