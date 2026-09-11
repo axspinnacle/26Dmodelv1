@@ -38,7 +38,7 @@ machines:
     paths:
       master_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
       aux_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
-      output_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
+      output_path: "output/car_liab/v1"
   PC3:
     conda_env: "py311_26v1"
     paths:
