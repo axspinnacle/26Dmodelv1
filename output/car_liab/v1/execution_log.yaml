@@ -1,0 +1,19 @@
+config_path: config/car_liab/v1
+duration_seconds: 3234.715791
+end_time: '2026-09-11T02:45:45.824514'
+experiment: car_liab_v1
+results:
+  stage_01: success
+  stage_02: success
+  stage_03: success
+  stage_04a: success
+  stage_04b: success
+  stage_04c: success
+  stage_05a: success
+  stage_05b: success
+  stage_05c: success
+  stage_06: success
+  stage_07: success
+  stage_08: success
+  stage_09: failed
+start_time: '2026-09-11T01:51:51.108723'

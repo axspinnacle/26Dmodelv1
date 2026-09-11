@@ -1,0 +1,23 @@
+fit_quality: !!python/object/apply:numpy._core.multiarray.scalar
+- &id001 !!python/object/apply:numpy.dtype
+  args:
+  - f8
+  - false
+  - true
+  state: !!python/tuple
+  - 3
+  - <
+  - null
+  - null
+  - null
+  - -1
+  - -1
+  - 0
+- !!binary |
+  FDIwULuv7D8=
+lift_opt_score: 0.9986716927596725
+mae: 283.57252598919126
+model_power: !!python/object/apply:numpy._core.multiarray.scalar
+- *id001
+- !!binary |
+  cMjUVs5i1T8=

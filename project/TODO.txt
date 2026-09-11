@@ -1,8 +1,58 @@
 10. Show results from two blocks in PCA - Done
-20. convert categorical to numerical - 
-30. add monotonocity 
-40. add initial, hyperparameter 
-50. add final 
+20. convert categorical to numerical - Done
+30. add monotonocity - Done
+40. add initial, hyperparameter - Done
+50. add final - Done
 60. add state level lift charts 
 70. run for 10% data for multiple veh types 
-80. make sure everything is running with 10% data 
+80. make sure everything is running with 10% data
+
+================================================================================
+TECHNICAL DEBT & REFACTORING
+================================================================================
+
+90. Refactor Hardcoded File Paths to Config
+    PROBLEM:
+    - Notebooks have hardcoded file paths (e.g., data/01_assembled.parquet)
+    - When naming conventions change, multiple notebooks break
+    - Just fixed  05_predictions_*.parquet instead of 05c_*
+    
+    SOLUTION:
+    Add 'files' section to config.yaml for all inter-stage file paths:
+    
+    files:
+      stage_01_output: "data/01_assembled.parquet"
+      stage_02_output: "data/02_conditioned.parquet"
+      stage_04a_output: "data/04a_pca_features.parquet"
+      stage_04b_train: "data/04b_train.parquet"
+      stage_04b_test: "data/04b_test.parquet"
+      stage_04c_train: "data/04c_train_encoded.parquet"
+      stage_04c_test: "data/04c_test_encoded.parquet"
+      stage_05a_predictions_train: "results/05a_predictions_train.parquet"
+      stage_05a_predictions_test: "results/05a_predictions_test.parquet"
+      stage_05c_predictions_train: "results/05c_predictions_train.parquet"
+      stage_05c_predictions_test: "results/05c_predictions_test.parquet"
+      stage_06_shap_train: "results/06_shap_train.parquet"
+      stage_06_shap_test: "results/06_shap_test.parquet"
+    
+    AFFECTED NOTEBOOKS:
+    - templates/02_data_conditioning.ipynb
+    - templates/03_verification.ipynb
+    - templates/04a_featureengineering.ipynb
+    - templates/04b_train_test_split.ipynb
+    - templates/04c_feature_encoding.ipynb
+    - templates/05a_model_initial.ipynb
+    - templates/05b_hpo.ipynb
+    - templates/05c_production.ipynb
+    - templates/06_shap_dataframe.ipynb
+    - templates/07_shap_analysis.ipynb (FIXED)
+    - templates/08_scoring.ipynb
+    
+    
+    STEPS:
+    1. Add 'files' section to config/car_coll/v1/config.yaml
+    2. Add 'files' section to config/car_liab/v1/config.yaml
+    3. Update lib/utils.py with helper to read file paths
+    4. Update each notebook template to use cfg['files'][...]
+    5. Test full pipeline run
+    

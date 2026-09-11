@@ -6,7 +6,7 @@ experiment:
   coverage: "liab"
   vehicle_type: "CAR"
 
-run_mode: "debug1"
+run_mode: "debug2"
 
 debug1:
   train_folds: [1]
@@ -99,15 +99,15 @@ xgboost:
 
 execution:
   stages:
-    stage_01: false
-    stage_02: false
-    stage_03: false
-    stage_04a: false
-    stage_04b: false
-    stage_04c: false
-    stage_05a: false
-    stage_05b: false
-    stage_05c: false
+    stage_01: true
+    stage_02: true
+    stage_03: true
+    stage_04a: true
+    stage_04b: true
+    stage_04c: true
+    stage_05a: true
+    stage_05b: true
+    stage_05c: true
     stage_06: true
     stage_07: true
     stage_08: true
