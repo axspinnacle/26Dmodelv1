@@ -33,6 +33,7 @@ def run_grid_search(
     best_score = -float('inf')
     best_params = None
     best_metrics = None
+    best_iteration = 0
     results = []
     
     total_combinations = np.prod([len(v) for v in param_grid.values()])
@@ -97,8 +98,10 @@ def run_grid_search(
         results.append(result_row)
         
         # Track best
-        if score > best_score:
+        is_new_best = score > best_score
+        if is_new_best:
             best_score = score
+            best_iteration = i + 1
             best_params = {k: v for k, v in param_dict.items() if k in param_grid or k == "n_estimators"}
             best_metrics = {
                 'fit_quality': fit_quality,
@@ -106,7 +109,10 @@ def run_grid_search(
                 'lift_opt_score': score,
                 'mae': mae
             }
-            print(f"  [{i+1}/{total_combinations}] New best: score={score:.4f} (fit={fit_quality:.4f}, power={model_power:.4f})")
+            print(f"  [{i+1}/{total_combinations}] ★ NEW BEST: score={score:.4f} (fit={fit_quality:.4f}, power={model_power:.4f})")
+        elif (i + 1) % 10 == 0:
+            # Progress update every 10 iterations
+            print(f"  [{i+1}/{total_combinations}] score={score:.4f} | best so far={best_score:.4f} ({best_iteration}/{total_combinations}, fit={best_metrics['fit_quality']:.2f}, power={best_metrics['model_power']:.2f})")
     
     print(f"\n* Grid search complete")
     print(f"  Best score: {best_score:.4f}")
