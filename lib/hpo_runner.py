@@ -15,7 +15,7 @@ from hpo_metrics import calculate_model_metrics, calculate_lift_opt_score
 def run_grid_search(
     X_train, y_train, w_train,
     X_test, y_test, w_test,
-    param_grid, base_xgb_params, n_estimators,
+    param_grid, base_xgb_params,
     monotone_constraints, exposure_col,
     scoring_config,
     glm_pred_test=None,
@@ -45,12 +45,11 @@ def run_grid_search(
     
     total_combinations = np.prod([len(v) for v in param_grid.values()])
     print(f"  Grid size: {total_combinations} combinations")
-    print(f"  n_estimators: {n_estimators}")
+    print(f"  n_estimators in grid: {param_grid.get('n_estimators', 'NOT FOUND - ERROR!')}")
     
     # Grid search
     for i, params in enumerate(product(*param_grid.values())):
         param_dict = dict(zip(param_grid.keys(), params))
-        param_dict['n_estimators'] = n_estimators
         
         # Merge with base params
         full_params = base_xgb_params.copy()

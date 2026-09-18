@@ -10,7 +10,7 @@ experiment:
   vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
 
 # Run mode configuration
-run_mode: "debug2"  # "debug1", "debug2", or "prod"
+run_mode: "prod"  # "debug1", "debug2", or "prod"
 
 debug1:
   train_folds: [1]
@@ -121,11 +121,11 @@ xgboost:
 # Execution control
 execution:
   stages:
-    stage_01: false    # Data assembly
-    stage_02: false    # Data conditioning  
-    stage_03: false    # Verification
-    stage_04a: false   # PCA feature engineering
-    stage_04b: false   # Train/test split by fold
+    stage_01: true    # Data assembly
+    stage_02: true    # Data conditioning  
+    stage_03: true    # Verification
+    stage_04a: true   # PCA feature engineering
+    stage_04b: true   # Train/test split by fold
     stage_04c: true   # Feature encoding + model prep
     stage_05a: true   # Initial model fit (validation)
     stage_05b: false   # Hyperparameter optimization
@@ -149,6 +149,7 @@ hyperparameter_optimization:
     min_child_weight: [500, 1000, 2000]
     subsample: [0.8, 1.0]
     colsample_bytree: [1.0]
+    n_estimators: [100, 300, 500]
   scoring:                   # Actuarial lift optimization scoring
     bins: 10                 # Number of deciles for lift calculation
     fit_threshold: 0.85      # Minimum acceptable fit quality (0-1)
