@@ -2,7 +2,7 @@
 # Configuration for pp_bi target (bodily injury pure premium)
 
 experiment:
-  name: "car_bi_v1"
+  name: "car_coll_v1"
   description: "Car body injury model - baseline"
   target: "pp_coll"
   exposure: "ee_coll_imps"
@@ -73,7 +73,7 @@ data:
   fold_column: "fold"   # Column in AUX file only
   join_type: "inner"    # Inner join to keep only matched records
   columns_to_load_file: "columns_to_load_during_dataassembly.csv"  # Subset of columns to load (performance)
-  control_model_file: "aux_dataset_car_vindate_ctl.parquet"  # GLM predictions for base_margin
+  control_model_file: "aux_dataset_car_vindate_ctl_no_duplicate.parquet"  # GLM predictions for base_margin
   
 # Feature configuration
 # Features loaded from CSV file with category/range metadata
@@ -95,6 +95,7 @@ feature_engineering:
 
 # Model configuration
 model:
+  target_method: "residual"  # "residual" (GBM learns PP/GLM ratio) or "direct" (GBM learns PP)
   use_glm_init: true
   glm_init_transform: "log"
   glm_prediction_column: "pred_pp_coll"
@@ -128,7 +129,7 @@ execution:
     stage_04c: false   # Feature encoding + model prep
     stage_05a: false   # Initial model fit (validation)
     stage_05b: false   # Hyperparameter optimization
-    stage_05c: false   # Production model training
+    stage_05c: true   # Production model training
     stage_06: true    # SHAP dataframe
     stage_07: true    # SHAP analysis & plot from df
     stage_08: true    # Scoring (holdout/new data)

@@ -17,13 +17,20 @@ def run_grid_search(
     X_test, y_test, w_test,
     param_grid, base_xgb_params, n_estimators,
     monotone_constraints, exposure_col,
-    scoring_config
+    scoring_config,
+    glm_pred_test=None,
+    target_method="direct"
 ):
     """
     Run grid search over hyperparameters using actuarial lift metrics.
     
+    Args:
+        glm_pred_test: GLM predictions for test set (needed for residual method)
+        target_method: "residual" or "direct" - determines if inverse transform needed
+    
     Returns dict with: best_params, best_metrics, best_score, results_df
     """
+    from model_utils import inverse_transform
     bins = scoring_config.get('bins', 10)
     fit_threshold = scoring_config.get('fit_threshold', 0.70)
     steepness = scoring_config.get('steepness', 20.0)
@@ -63,13 +70,24 @@ def run_grid_search(
             verbose=0
         )
         
-        # Predict
-        pred_test = model.predict(X_test)
+        # Predict (raw GBM output)
+        pred_test_raw = model.predict(X_test)
         
-        # Prepare data for metrics
+        # Apply inverse transform if using residual method
+        if target_method == "residual":
+            if glm_pred_test is None:
+                raise ValueError("glm_pred_test required for residual method")
+            pred_test = inverse_transform(pd.Series(pred_test_raw), glm_pred_test, target_method)
+            # Also need actual PP for metrics (y_test is ratio, need to convert back)
+            y_test_pp = inverse_transform(pd.Series(y_test), glm_pred_test, target_method)
+        else:
+            pred_test = pred_test_raw
+            y_test_pp = y_test
+        
+        # Prepare data for metrics (using PP space)
         test_eval = pd.DataFrame({
             'pred': pred_test,
-            'act_weighted': y_test * w_test,
+            'act_weighted': y_test_pp * w_test,
             'pred_weighted': pred_test * w_test,
             exposure_col: w_test
         })
@@ -84,8 +102,8 @@ def run_grid_search(
             power_norm_cap=power_norm_cap
         )
         
-        # Calculate MAE for reference
-        mae = mean_absolute_error(y_test, pred_test, sample_weight=w_test)
+        # Calculate MAE for reference (in PP space)
+        mae = mean_absolute_error(y_test_pp, pred_test, sample_weight=w_test)
         
         # Store results
         result_row = {k: v for k, v in param_dict.items() if k in param_grid or k == 'n_estimators'}

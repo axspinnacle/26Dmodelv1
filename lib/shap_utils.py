@@ -8,6 +8,7 @@ pass data and return results instead of using globals.
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
 
 def compute_shap_aggregate(shap_df, weight_col='weight'):
@@ -217,5 +218,159 @@ def create_feature_importance_plot(shagg_df, top_n=20):
     ax.grid(True, alpha=0.3, axis='x')
     
     plt.tight_layout()
+    return fig
+
+
+def create_fast_shap_summary(shap_df, feature_df, top_n=20, weight_col='weight', n_quantiles=20):
+    """
+    Fast SHAP summary plot using percentile bands instead of scatter.
+    Uses 100% of data, plots aggregated percentiles - instant rendering.
+    
+    Args:
+        shap_df: DataFrame with SHAP values (rows=samples, cols=features)
+        feature_df: DataFrame with original feature values (same index as shap_df)
+        top_n: Number of top features to plot
+        weight_col: Weight column name in shap_df
+        n_quantiles: Number of quantile bands for feature binning
+    
+    Returns:
+        fig: matplotlib figure
+    """
+    print(f"  Creating fast SHAP summary for {len(shap_df):,} rows...")
+    
+    # Get top features by weighted importance
+    shagg, _, shagg2 = compute_shap_aggregate(shap_df, weight_col=weight_col)
+    top_features = shagg2.head(top_n)['field'].tolist()
+    
+    # Prepare data for plotting
+    results = []
+    for feat in top_features:
+        if feat not in shap_df.columns or feat not in feature_df.columns:
+            continue
+            
+        shap_vals = shap_df[feat].values
+        feat_vals = feature_df[feat].values
+        
+        # Remove NaN
+        mask = ~(np.isnan(shap_vals) | np.isnan(feat_vals))
+        shap_vals = shap_vals[mask]
+        feat_vals = feat_vals[mask]
+        
+        if len(shap_vals) == 0:
+            continue
+        
+        # Compute percentiles for this feature
+        percentiles = [5, 25, 50, 75, 95]
+        shap_pcts = np.percentile(shap_vals, percentiles)
+        
+        # Normalize feature values to [0, 1] for color
+        feat_min, feat_max = np.percentile(feat_vals, [1, 99])
+        if feat_max > feat_min:
+            feat_norm = np.median((feat_vals - feat_min) / (feat_max - feat_min))
+        else:
+            feat_norm = 0.5
+        
+        results.append({
+            'feature': feat,
+            'p05': shap_pcts[0],
+            'p25': shap_pcts[1],
+            'p50': shap_pcts[2],
+            'p75': shap_pcts[3],
+            'p95': shap_pcts[4],
+            'feat_norm': np.clip(feat_norm, 0, 1)
+        })
+    
+    if not results:
+        print("  Warning: No valid features for summary plot")
+        return None
+    
+    df_plot = pd.DataFrame(results)
+    
+    # Create plot
+    fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.4)))
+    
+    # Color map (blue to red)
+    cmap = plt.cm.RdBu_r
+    
+    for i, row in df_plot.iterrows():
+        y = len(df_plot) - i - 1  # Reverse order
+        
+        # Plot percentile bands
+        # IQR (25-75)
+        color = cmap(row['feat_norm'])
+        ax.barh(y, row['p75'] - row['p25'], left=row['p25'], height=0.6, 
+                color=color, alpha=0.7, edgecolor='none')
+        
+        # 5-95 whiskers
+        ax.plot([row['p05'], row['p95']], [y, y], 'k-', linewidth=1.5, alpha=0.5)
+        
+        # Median marker
+        ax.plot(row['p50'], y, 'ko', markersize=4)
+    
+    # Set labels
+    ax.set_yticks(range(len(df_plot)))
+    ax.set_yticklabels(df_plot['feature'][::-1])
+    ax.set_xlabel('SHAP Value', fontsize=11)
+    ax.set_title(f'SHAP Summary (Percentile Bands, {len(shap_df):,} samples)', fontsize=12, fontweight='bold')
+    ax.axvline(x=0, color='gray', linestyle='--', alpha=0.5, linewidth=1)
+    ax.grid(True, alpha=0.3, axis='x')
+    
+    # Add colorbar
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=1))
+    sm.set_array([])
+    cbar = plt.colorbar(sm, ax=ax, pad=0.02, aspect=30)
+    cbar.set_label('Feature Value', rotation=270, labelpad=20)
+    cbar.set_ticks([0, 0.5, 1])
+    cbar.set_ticklabels(['Low', 'Mid', 'High'])
+    
+    plt.tight_layout()
+    print(f"  SHAP summary created")
+    return fig
+
+
+def create_shap_importance_pct(shap_df, top_n=20, weight_col='weight'):
+    """
+    Create SHAP feature importance as percentage bar chart.
+    
+    Args:
+        shap_df: DataFrame with SHAP values
+        top_n: Number of top features to show
+        weight_col: Weight column name
+    
+    Returns:
+        fig: matplotlib figure
+    """
+    print(f"  Creating SHAP importance % chart for {len(shap_df):,} rows...")
+    
+    # Get weighted importance
+    shagg, _, shagg2 = compute_shap_aggregate(shap_df, weight_col=weight_col)
+    top_features = shagg2.head(top_n).copy()
+    
+    # Calculate percentage
+    total_shap = top_features['total_shap'].sum()
+    top_features['pct'] = (top_features['total_shap'] / total_shap) * 100
+    
+    # Create plot
+    fig, ax = plt.subplots(figsize=(10, max(6, top_n * 0.35)))
+    
+    # Horizontal bars
+    colors = plt.cm.viridis(np.linspace(0.3, 0.9, len(top_features)))
+    ax.barh(range(len(top_features)), top_features['pct'], color=colors, edgecolor='black', linewidth=0.5)
+    
+    # Labels
+    ax.set_yticks(range(len(top_features)))
+    ax.set_yticklabels(top_features['field'])
+    ax.invert_yaxis()
+    ax.set_xlabel('Importance (%)', fontsize=11)
+    ax.set_title(f'SHAP Feature Importance (Top {top_n})', fontsize=12, fontweight='bold')
+    ax.grid(True, alpha=0.3, axis='x')
+    
+    # Add percentage labels
+    for i, (idx, row) in enumerate(top_features.iterrows()):
+        ax.text(row['pct'] + 0.5, i, f"{row['pct']:.1f}%", va='center', fontsize=9)
+    
+    plt.tight_layout()
+    print(f"  SHAP importance % chart created")
+    return fig
     
     return fig

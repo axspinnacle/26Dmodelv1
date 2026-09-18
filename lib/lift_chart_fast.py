@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import time
 
 
-def create_lift_chart(data, weight_name, bins=10, title="Lift Chart"):
-    """Create lift chart (optimized for large data). Usage: fig, decile_df = create_lift_chart(data, 'weight', bins=10)"""
+def create_lift_chart(data, weight_name, bins=10, title="Lift Chart", y_max=4.0):
+    """Create lift chart (optimized for large data). Usage: fig, decile_df = create_lift_chart(data, 'weight', bins=10, y_max=4.0)"""
     t0 = time.time()
     
     # Step 1: Create column list
@@ -64,18 +64,37 @@ def create_lift_chart(data, weight_name, bins=10, title="Lift Chart"):
     x['act_rel'] = x['act'] / overall_pred
     x['pred_rel'] = x['pred'] / overall_pred
     
+    # Calculate weight percentage per decile
+    x['weight_pct'] = (x[weight_name] / x[weight_name].sum()) * 100
+    
     # Plot
     print(f"  Creating plot...")
     t3 = time.time()
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(x['decile'], x['act_rel'], marker='o', label='Actual Relativity', linewidth=2)
-    ax.plot(x['decile'], x['pred_rel'], marker='s', label='Predicted Relativity', linewidth=2)
-    ax.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5)
-    ax.set_xlabel('Decile')
-    ax.set_ylabel('Relativity')
-    ax.set_title(title)
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+    
+    # Left Y-axis: Relativity
+    ax1.plot(x['decile'], x['act_rel'], marker='o', label='Actual Relativity', linewidth=2, color='#1f77b4')
+    ax1.plot(x['decile'], x['pred_rel'], marker='s', label='Predicted Relativity', linewidth=2, color='#ff7f0e')
+    ax1.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5)
+    ax1.set_xlabel('Decile', fontsize=11)
+    ax1.set_ylabel('Relativity', fontsize=11)
+    ax1.set_ylim(0, y_max)
+    ax1.set_title(title, fontsize=12, fontweight='bold')
+    ax1.grid(True, alpha=0.3)
+    
+    # Right Y-axis: Weight percentage
+    ax2 = ax1.twinx()
+    ax2.bar(x['decile'], x['weight_pct'], alpha=0.25, color='#2196F3', width=0.6, label='Exposure %')
+    ax2.set_ylabel('Weights (%)', fontsize=11, color='#2196F3')
+    ax2.set_ylim(0, 100)
+    ax2.tick_params(axis='y', labelcolor='#2196F3')
+    
+    # Combined legend (exposure below relativity lines)
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+    
+    fig.tight_layout()
     print(f"  Plot created in {time.time()-t3:.1f}s")
     
     print(f"  TOTAL TIME: {time.time()-t0:.1f}s")

@@ -1,0 +1,11 @@
+base_margin_applied: true
+best_iteration: 215
+monotone_constraints_applied: true
+n_features: 200
+stage: 05a_initial
+test:
+  mae: 285.31477631422854
+  rmse: 6814.119071908791
+train:
+  mae: 274.77842709416495
+  rmse: 6629.163371512157

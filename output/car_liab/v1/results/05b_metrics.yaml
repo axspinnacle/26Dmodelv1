@@ -14,10 +14,10 @@ fit_quality: !!python/object/apply:numpy._core.multiarray.scalar
   - -1
   - 0
 - !!binary |
-  FDIwULuv7D8=
-lift_opt_score: 0.9986716927596725
-mae: 283.57252598919126
+  JiIDqJCk3z8=
+lift_opt_score: 0.01132494933903223
+mae: 289.65976905533114
 model_power: !!python/object/apply:numpy._core.multiarray.scalar
 - *id001
 - !!binary |
-  cMjUVs5i1T8=
+  8Yse79qh7D8=
