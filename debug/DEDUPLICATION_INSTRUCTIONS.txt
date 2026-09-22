@@ -1,0 +1,93 @@
+================================================================================
+AUX FILE DEDUPLICATION - INSTRUCTIONS
+================================================================================
+
+VERIFIED: All 4.3M duplicate rows are IDENTICAL
+  - Hash-based verification took 48s
+  - 0 mismatched groups found
+  - Safe to proceed with drop_duplicates()
+
+================================================================================
+STEP 1: RUN DEDUPLICATION NOTEBOOK
+================================================================================
+
+Location: debug/deduplicate_aux.ipynb
+
+This notebook will:
+  1. Load car_with_dep_factor_fold.parquet (27M rows)
+  2. Verify all duplicates are identical using hash-based check (~48s)
+  3. Drop duplicates keeping first occurrence
+  4. Save as car_with_dep_factor_fold_dedup.parquet (~23M rows)
+  5. Verify the saved file has no duplicates
+
+Expected results:
+  - Input:  27,052,200 rows (4.3M duplicates = 16%)
+  - Output: 22,703,333 rows (0 duplicates)
+  - Time:   ~60-90 seconds total
+  - Space saved: ~0.7-1.0 GB
+
+Output file location:
+  /Users/Mach/dev/aps/data/2026_Dmodel_data/car_with_dep_factor_fold_dedup.parquet
+
+================================================================================
+STEP 2: CONFIG FILES ALREADY UPDATED ✓
+================================================================================
+
+The following configs have been updated to use the deduplicated file:
+
+1. config/car_liab/v1/config.yaml (line 71)
+   FROM: aux_file: "car_with_dep_factor_fold.parquet"
+   TO:   aux_file: "car_with_dep_factor_fold_dedup.parquet"
+
+2. config/car_coll/v1/config.yaml (line 71)
+   FROM: aux_file: "car_with_dep_factor_fold.parquet"
+   TO:   aux_file: "car_with_dep_factor_fold_dedup.parquet"
+
+================================================================================
+STEP 3: RE-RUN PIPELINE
+================================================================================
+
+After running the deduplication notebook:
+
+1. Run 01_data_assembly.ipynb
+   - Will now use deduplicated aux file
+   - Should have 0 duplicate vin_dates in assembled data
+
+2. Run 04c_feature_encoding.ipynb
+   - GLM files will now have unique vin_dates
+   - No more row explosion during merge
+
+3. Run 05b_hpo.ipynb and 05c_production.ipynb
+   - Fixed merge logic will work correctly
+   - No row count mismatches
+
+================================================================================
+VERIFICATION CHECKLIST
+================================================================================
+
+After running deduplication notebook:
+  ☐ File created: car_with_dep_factor_fold_dedup.parquet
+  ☐ File size: ~85% of original
+  ☐ Zero duplicates confirmed
+  ☐ All 19 columns preserved
+
+After re-running pipeline:
+  ☐ 01_assembled has 0 duplicate vin_dates
+  ☐ 04c GLM files have unique vin_dates only
+  ☐ 05x merge preserves row counts
+  ☐ No more "X row explosion" messages
+  ☐ Feature correlations are non-zero
+
+================================================================================
+ROLLBACK (if needed)
+================================================================================
+
+To revert to original file:
+
+1. Edit config files back to:
+   aux_file: "car_with_dep_factor_fold.parquet"
+
+2. Delete deduplicated file (optional):
+   rm /Users/Mach/dev/aps/data/2026_Dmodel_data/car_with_dep_factor_fold_dedup.parquet
+
+================================================================================

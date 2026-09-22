@@ -80,8 +80,9 @@ def load_glm_predictions(
     control_file: str,
     data: pd.DataFrame,
     join_key: str,
-    target_col: str
-) -> pd.Series:
+    target_col: str,
+    drop_missing: bool = False
+) -> tuple:
     """
     Load raw GLM predictions and join to data.
     
@@ -91,9 +92,11 @@ def load_glm_predictions(
         data: DataFrame to join with (must have join_key column)
         join_key: Column name to join on (e.g., 'vin_date')
         target_col: Column name of GLM predictions (e.g., 'pred_pp_coll')
+        drop_missing: If True, use inner join and return matched indices. If False, use left join and fill with median.
         
     Returns:
-        Series of raw GLM predictions (same index as data)
+        If drop_missing=False: Series of raw GLM predictions (same index as data)
+        If drop_missing=True: (Series of GLM predictions, matched_indices)
     """
     control_path = Path(aux_data_path) / control_file
     if not control_path.exists():
@@ -103,18 +106,28 @@ def load_glm_predictions(
     glm_preds = pd.read_parquet(control_path, columns=[join_key, target_col])
     
     # Join with data - preserve original index
+    join_type = 'inner' if drop_missing else 'left'
     data_with_glm = data[[join_key]].reset_index().merge(
         glm_preds,
         on=join_key,
-        how='left'
+        how=join_type
     ).set_index('index')
     
-    # Handle missing GLM predictions
-    missing_count = data_with_glm[target_col].isna().sum()
-    if missing_count > 0:
-        print(f"Warning: {missing_count} rows missing GLM predictions, filling with median")
-        median_pred = data_with_glm[target_col].median()
-        data_with_glm[target_col] = data_with_glm[target_col].fillna(median_pred)
+    if drop_missing:
+        # Report dropped rows
+        matched_count = len(data_with_glm)
+        dropped_count = len(data) - matched_count
+        dropped_pct = 100 * dropped_count / len(data) if len(data) > 0 else 0
+        print(f"  Removed {dropped_count:,} rows ({dropped_pct:.2f}%) without GLM predictions")
+        matched_indices = data_with_glm.index
+    else:
+        # Handle missing GLM predictions with fillna
+        missing_count = data_with_glm[target_col].isna().sum()
+        if missing_count > 0:
+            print(f"Warning: {missing_count} rows missing GLM predictions, filling with median")
+            median_pred = data_with_glm[target_col].median()
+            data_with_glm[target_col] = data_with_glm[target_col].fillna(median_pred)
+        matched_indices = None
     
     # Ensure positive values
     min_val = data_with_glm[target_col].min()
@@ -124,8 +137,11 @@ def load_glm_predictions(
     
     print(f"Loaded GLM predictions: mean={data_with_glm[target_col].mean():.4f}, std={data_with_glm[target_col].std():.4f}")
     
-    # Return series with original index preserved
-    return data_with_glm[target_col]
+    # Return based on mode
+    if drop_missing:
+        return data_with_glm[target_col], matched_indices
+    else:
+        return data_with_glm[target_col]
 
 
 def load_glm_init(
@@ -271,6 +287,47 @@ def build_xgb_params(
     return params
 
 
+def apply_target_cap(
+    pp_train,
+    pp_test, 
+    target_cap,
+    verbose=True
+):
+    """
+    Apply cap to target variable to remove extreme outliers.
+    
+    Args:
+        pp_train: Training target values (Series or array)
+        pp_test: Test target values (Series or array)
+        target_cap: Maximum allowed value (e.g., 100000)
+        verbose: Whether to print summary
+        
+    Returns:
+        Tuple of (capped_train, capped_test)
+    """
+    if target_cap is None:
+        return pp_train, pp_test
+    
+    # Count values that will be capped
+    n_cap_train = (pp_train > target_cap).sum()
+    n_cap_test = (pp_test > target_cap).sum()
+    
+    # Apply cap
+    if isinstance(pp_train, pd.Series):
+        pp_train_capped = pp_train.clip(upper=target_cap)
+        pp_test_capped = pp_test.clip(upper=target_cap)
+    else:
+        pp_train_capped = np.clip(pp_train, None, target_cap)
+        pp_test_capped = np.clip(pp_test, None, target_cap)
+    
+    if verbose and (n_cap_train + n_cap_test > 0):
+        print(f"  Capped target at {target_cap:,}:")
+        print(f"    Train: {n_cap_train:,} values")
+        print(f"    Test: {n_cap_test:,} values")
+    
+    return pp_train_capped, pp_test_capped
+
+
 def transform_target(
     pp,  # Can be pd.Series or np.ndarray
     glm_pred,  # Can be pd.Series, np.ndarray, or None
@@ -394,13 +451,17 @@ def save_predictions(
         "exposure": exposure.values if isinstance(exposure, pd.Series) else exposure
     })
     
+    # Preserve index from y_actual if it has one (e.g., vin_date)
+    if isinstance(y_actual, pd.Series) and y_actual.index.name is not None:
+        df.index = y_actual.index
+    
     # Add extra columns
     for col_name, col_data in extra_cols.items():
         df[col_name] = col_data
     
-    # Save
+    # Save with reset_index to make index a regular column (for portability)
     output_file = f"{results_dir}/{stage}_predictions_{split}.parquet"
-    df.to_parquet(output_file, index=True)
+    df.reset_index().to_parquet(output_file, index=False)
     
     return output_file
 
@@ -483,13 +544,17 @@ def save_debug_output(
 
 # New function
 def load_glm_for_scoring(df,cfg,score_cfg,pc_id,target_method):
-    if target_method!="residual": return None
+    """
+    Load GLM predictions for scoring. Returns (glm_preds, matched_indices).
+    Drops rows without GLM predictions (inner join).
+    """
+    if target_method!="residual": return None, None
     glm_source=score_cfg.get("glm_source","lookup")
     join_key=cfg["data"]["join_key"]
     if glm_source=="column":
         col=score_cfg.get("glm_column")
         if col not in df.columns: raise ValueError(f"Missing {col}")
-        return df[col].copy()
+        return df[col].copy(), df.index  # Return all indices when using column
     if join_key not in df.columns:
         raise ValueError(f"Missing {join_key}. Use glm_source=column")
     
@@ -500,4 +565,5 @@ def load_glm_for_scoring(df,cfg,score_cfg,pc_id,target_method):
     
     from model_utils import load_glm_predictions
     paths=cfg["machines"][pc_id]["paths"]
-    return load_glm_predictions(paths["aux_data_path"],cfg["data"]["control_model_file"],df,join_key,glm_col)
+    # Use drop_missing=True to get matched indices
+    return load_glm_predictions(paths["aux_data_path"],cfg["data"]["control_model_file"],df,join_key,glm_col,drop_missing=True)

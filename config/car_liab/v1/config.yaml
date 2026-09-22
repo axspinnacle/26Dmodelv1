@@ -8,9 +8,10 @@ experiment:
   exposure: "ee_bi_imps"
   coverage: "liab"
   vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
+  target_cap: 100000  # Cap extreme losses (affects 0.045% of data)
 
 # Run mode configuration
-run_mode: "prod"  # "debug1", "debug2", or "prod"
+run_mode: "debug2"  # "debug1", "debug2", or "prod"
 
 debug1:
   train_folds: [1]
@@ -26,9 +27,9 @@ debug2:
 
 prod:
   train_folds: [1, 2, 3, 4, 5]
-  test_folds: [6, 7]
+  test_folds: [6,7]
   holdout_folds: [8, 9, 10]
-  hpo_trials: 100
+  hpo_trials: 20
 
 # Machine-specific configuration (selected automatically based on current.pc file)
 # The current.pc file contains a number (1-4) that determines which machine config to use
@@ -46,7 +47,7 @@ machines:
     paths:
       master_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
       aux_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
-      output_path: "output/car_liab/v1"  # Relative to project root
+      output_path: "/home/carfax_shared/data/2026_Dmodel_data"  # TODO: Change to output folder after testing
   PC3:
     # Mac - Machine Learning Development local development under user aps
     conda_env: "py311_26v1"
@@ -68,7 +69,7 @@ machines:
 # Actual paths are in machines.PCX.paths section above
 data:
   master_file: "master_dataset_car.parquet"
-  aux_file: "car_with_dep_factor_fold.parquet"
+  aux_file: "car_with_dep_factor_fold_dedup.parquet"  # Deduplicated version (was: car_with_dep_factor_fold.parquet)
   join_key: "vin_date"  # Column name for join (vindate or similar)
   fold_column: "fold"   # Column in AUX file only
   join_type: "inner"    # Inner join to keep only matched records
@@ -88,9 +89,9 @@ feature_engineering:
   pca:
     enabled: true                           # Toggle PCA feature engineering on/off
     features_file: "pca_features.csv"       # CSV with column_name, pca_group, notes
-    group_column: "pca_group"               # Column name for grouping
-    max_components: 5                       # Max PCA components per group
-    variance_threshold: 0.95                # Variance to retain
+    group_column: "pca_group"               # Column name containing group tags
+    max_components: 5                       # Maximum components per group (takes priority if set)
+    variance_threshold: 0.95                # Keep components explaining 95% variance (fallback if max_components not set)
     prefix_template: "pca_{group}_"         # {group} replaced with group name (e.g., pca_veh_char_0)
 
 # Model configuration
@@ -121,40 +122,41 @@ xgboost:
 # Execution control
 execution:
   stages:
-    stage_01: true    # Data assembly
-    stage_02: true    # Data conditioning  
-    stage_03: true    # Verification
-    stage_04a: true   # PCA feature engineering
-    stage_04b: true   # Train/test split by fold
-    stage_04c: true   # Feature encoding + model prep
-    stage_05a: true   # Initial model fit (validation)
+    stage_01: false   # Data assembly
+    stage_02: false   # Data conditioning  
+    stage_03: false   # Verification
+    stage_04a: false  # PCA feature engineering
+    stage_04b: false   # Train/test split by fold
+    stage_04c: false   # Feature encoding + model prep
+    stage_05a: false   # Initial model fit (validation)
     stage_05b: false   # Hyperparameter optimization
     stage_05c: true   # Production model training
-    stage_06: true    # SHAP dataframe
-    stage_07: true    # SHAP analysis & plot from df
-    stage_08: true    # Scoring (holdout/new data)
-    stage_09: false   # State analysis
+    stage_06: false    # SHAP dataframe
+    stage_07: false    # SHAP analysis & plot from df
+    stage_08: false    # Scoring (holdout/new data)
+    stage_09: false    # State analysis
   
   stop_on_error: true
   cleanup_memory: true
 
 # Hyperparameter Optimization Configuration
 hyperparameter_optimization:
-  method: "grid"             # "grid" (default, no extra deps) or "optuna" (optional)
+  method: "optuna"             # "grid" (default, no extra deps) or "optuna" (optional)
   n_trials: 100              # For optuna (if method="optuna")
   timeout_minutes: 60        # Max time for optuna
-  param_grid:                # For grid search
-    max_depth: [3, 5, 6]
-    learning_rate: [0.01, 0.1, 0.2]
-    min_child_weight: [500, 1000, 2000]
+  param_grid:                # Search ranges for optuna or grid search
+    max_depth: [4, 5, 6]
+    learning_rate: [0.01, 0.05, 0.1]
+    min_child_weight: [100, 300, 500]
     subsample: [0.8, 1.0]
-    colsample_bytree: [1.0]
-    n_estimators: [100, 300, 500]
+    colsample_bytree: [0.8, 1.0]
+    n_estimators: [300, 500]
+    tweedie_variance_power: [1.3, 1.5, 1.7]
   scoring:                   # Actuarial lift optimization scoring
     bins: 10                 # Number of deciles for lift calculation
-    fit_threshold: 0.85      # Minimum acceptable fit quality (0-1)
-    steepness: 30.0          # Sigmoid penalty sharpness below threshold
-    power_weight: 0.15       # Weight of model_power in combined score
+    fit_threshold: 0.70      # Minimum acceptable fit quality (0-1)
+    steepness: 20.0          # Sigmoid penalty sharpness below threshold
+    power_weight: 0.20       # Weight of model_power in combined score
     power_norm_cap: 0.50     # Normalization cap for model_power
 
 # Scoring Configuration (holdout, new data, production)
@@ -163,7 +165,6 @@ scoring:
     source: "master"          # Use master file with fold filter
     folds: [8, 9, 10]
     has_target: true
-    glm_source: "lookup"      # Load GLM from control_model_file for residual method
   # Example for new year data:
   # year_2025:
   #   source: "file"

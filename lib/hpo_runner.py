@@ -36,6 +36,7 @@ def run_grid_search(
     steepness = scoring_config.get('steepness', 20.0)
     power_weight = scoring_config.get('power_weight', 0.25)
     power_norm_cap = scoring_config.get('power_norm_cap', 0.50)
+    penalty_type = scoring_config.get('penalty_type', 'linear')
     
     best_score = -float('inf')
     best_params = None
@@ -45,7 +46,10 @@ def run_grid_search(
     
     total_combinations = np.prod([len(v) for v in param_grid.values()])
     print(f"  Grid size: {total_combinations} combinations")
-    print(f"  n_estimators in grid: {param_grid.get('n_estimators', 'NOT FOUND - ERROR!')}")
+    print(f"  penalty_type: {penalty_type}")
+    print(f"  param_grid:")
+    for k, v in param_grid.items():
+        print(f"    {k}: {v}")
     
     # Grid search
     for i, params in enumerate(product(*param_grid.values())):
@@ -54,6 +58,12 @@ def run_grid_search(
         # Merge with base params
         full_params = base_xgb_params.copy()
         full_params.update(param_dict)
+        
+        # Fix eval_metric for tweedie if variance_power changed
+        if "tweedie_variance_power" in param_dict and "eval_metric" in full_params:
+            if "tweedie" in full_params["eval_metric"]:
+                vp = param_dict["tweedie_variance_power"]
+                full_params["eval_metric"] = f"tweedie-nloglik@{vp}"
         
         # Add monotonicity constraints
         if monotone_constraints:
@@ -73,21 +83,27 @@ def run_grid_search(
         pred_test_raw = model.predict(X_test)
         
         # Apply inverse transform if using residual method
+        # Maintain index alignment: w_test has vin_date index, use it for all Series
         if target_method == "residual":
             if glm_pred_test is None:
                 raise ValueError("glm_pred_test required for residual method")
-            pred_test = inverse_transform(pd.Series(pred_test_raw), glm_pred_test, target_method)
-            # Also need actual PP for metrics (y_test is ratio, need to convert back)
-            y_test_pp = inverse_transform(pd.Series(y_test), glm_pred_test, target_method)
+            # Create Series with proper index from w_test (which has vin_date from test_orig)
+            pred_test_series = pd.Series(pred_test_raw, index=w_test.index)
+            y_test_series = pd.Series(y_test, index=w_test.index)
+            
+            # inverse_transform preserves Series type and index
+            pred_test_pp = inverse_transform(pred_test_series, glm_pred_test, target_method)
+            y_test_pp = inverse_transform(y_test_series, glm_pred_test, target_method)
         else:
-            pred_test = pred_test_raw
-            y_test_pp = y_test
+            pred_test_pp = pd.Series(pred_test_raw, index=w_test.index)
+            y_test_pp = pd.Series(y_test, index=w_test.index)
         
         # Prepare data for metrics (using PP space)
+        # All Series now have matching vin_date index - no alignment errors
         test_eval = pd.DataFrame({
-            'pred': pred_test,
+            'pred': pred_test_pp,
             'act_weighted': y_test_pp * w_test,
-            'pred_weighted': pred_test * w_test,
+            'pred_weighted': pred_test_pp * w_test,
             exposure_col: w_test
         })
         
@@ -98,11 +114,12 @@ def run_grid_search(
             fit_threshold=fit_threshold,
             steepness=steepness,
             power_weight=power_weight,
-            power_norm_cap=power_norm_cap
+            power_norm_cap=power_norm_cap,
+            penalty_type=penalty_type
         )
         
         # Calculate MAE for reference (in PP space)
-        mae = mean_absolute_error(y_test_pp, pred_test, sample_weight=w_test)
+        mae = mean_absolute_error(y_test_pp, pred_test_pp, sample_weight=w_test)
         
         # Store results
         result_row = {k: v for k, v in param_dict.items() if k in param_grid or k == 'n_estimators'}

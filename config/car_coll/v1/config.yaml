@@ -68,7 +68,7 @@ machines:
 # Actual paths are in machines.PCX.paths section above
 data:
   master_file: "master_dataset_car.parquet"
-  aux_file: "car_with_dep_factor_fold.parquet"
+  aux_file: "car_with_dep_factor_fold_dedup.parquet"  # Deduplicated version (was: car_with_dep_factor_fold.parquet)
   join_key: "vin_date"  # Column name for join (vindate or similar)
   fold_column: "fold"   # Column in AUX file only
   join_type: "inner"    # Inner join to keep only matched records

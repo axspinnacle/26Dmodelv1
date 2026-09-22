@@ -55,4 +55,95 @@ TECHNICAL DEBT & REFACTORING
     3. Update lib/utils.py with helper to read file paths
     4. Update each notebook template to use cfg['files'][...]
     5. Test full pipeline run
+
+100. Fix Notebook Cell ID Warnings (MissingIDFieldWarning)
+     Priority: Low | Effort: 5 min
+     
+     PROBLEM:
+     - Warning: "Cell is missing an id field, this will become a hard error in future nbformat versions"
+     - Notebook templates created with older Jupyter version lack cell IDs
+     - Will break in future nbformat versions
+     
+     SOLUTION:
+     Run this command from project root to normalize all notebooks:
+     
+     cd /Users/Mach/dev/aps/code/26Dmodelv1
+     
+     # Using nbformat (recommended)
+     python3 -c "
+     import nbformat
+     from pathlib import Path
+     for folder in ['templates', 'runners', 'setup_notebooks']:
+         for nb_path in Path(folder).glob('*.ipynb'):
+             nb = nbformat.read(nb_path, as_version=4)
+             nbformat.normalize(nb)
+             nbformat.write(nb, nb_path)
+             print(f'Normalized: {nb_path}')
+     "
+     
+     AFFECTED FILES:
+     - All notebooks in templates/ folder
+     - All notebooks in runners/ folder
+     - All notebooks in setup_notebooks/ folder
+
+110. Suppress Kernel TCP Encryption Warning
+     Priority: Low | Effort: 2 min
+     
+     PROBLEM:
+     - Warning: "Kernel is running over TCP without encryption"
+     - Appears every time kernel starts
+     - Not a security risk for local development
+     
+     SOLUTION OPTIONS:
+     
+     A. Use IPC transport (recommended - eliminates warning):
+        Add to ~/.jupyter/jupyter_notebook_config.py:
+        c.KernelManager.transport = 'ipc'
+     
+     B. Suppress warning via environment:
+        export PYTHONWARNINGS="ignore::UserWarning"
+     
+     NOTE: For PC2 (remote server), consider proper encryption setup
+
+120. Create Experiments Folder Structure
+     - Root-level `experiments/` folder, self-contained per experiment
+     - Each has: config.yaml + run.ipynb + output/
+     - Production folders (config/, output/, runners/) untouched
+     - Update HowToDoModelExperiments.md with new workflow
+
+130. Implement Residual vs Direct Target Methods
+     Priority: Medium | Effort: 2-3 hours | STATUS: COMPLETE ✓
+     
+     Add config-driven target transformation for GBM:
+     - Direct: GBM predicts PP directly
+     - Residual: GBM predicts PP/GLM correction factor
+     
+     Implementation plan:
+     [✓] 1. lib/model_utils.py: Add transform_target(), inverse_transform()
+     [✓] 2. config/*.yaml: Add model.target_method setting
+     [✓] 3. lib/hpo_runner.py: Pass GLM, use transforms
+     [✓] 3b. lib/model_utils.py: Add predict_with_transform(), save_predictions(), save_debug_output()
+     [✓] 4. templates/05a, 05b, 05c: Use transform functions
+     [✓] 5. templates/05c: Full debug output (11 cols) - save_debug_output() called
+     [~] 6. Lift charts: Current lift uses final PP (correct). Dual ratio/PP views optional enhancement
+     [✓] 7. templates/07_shap_analysis.ipynb: Added interpretation note
+     [✓] 8. templates/08_scoring.ipynb: Use predict_with_transform + debug output
+     [✓] 9. GLM file refactor: 04c saves raw GLM to 04c_*_glm.parquet, base_margin computed on-the-fly
+     
+     Full debug columns (vin_date, exposure, pp_actual, glm_pred, gbm_pred_raw, 
+                        pp_predicted, loss_raw, msrp, dep_factor, veh_value_dep, fold)
+     
+     Key: All downstream code (lift, HPO, metrics) only sees PP (after inverse transform)
+     
+     GLM File Change: 04c_*_base_margin.parquet → 04c_*_glm.parquet (raw GLM, base_margin = log(glm))
+
+================================================================================
+COMPLETED RECENTLY
+================================================================================
+- Fixed Stage 07 hardcoded paths (05_ → 05c_)
+- Created documentation/HowToCreateNewModel.md
+- Created documentation/HowToDoModelExperiments.md
+- Created documentation/ModelMath.md (complete math reference)
+- Fixed car_liab config (pp_coll → pp_bi, ee_coll_imps → ee_bi_imps)
+- Fixed HPO progress logging (added every-10-iteration updates to prevent kernel timeout)
     

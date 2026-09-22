@@ -36,10 +36,10 @@ def calculate_model_metrics(data, weight_name, bins=10):
     """
     test_data = data.copy()
     
-    # Create deciles based on predictions (descending order)
+    # Create deciles based on predictions (ascending order)
     test_data['decile'] = (
         round(
-            test_data.sort_values(by='pred', ascending=False)[weight_name].cumsum() / 
+            test_data.sort_values(by='pred')[weight_name].cumsum() / 
             test_data[weight_name].sum(), 
             2
         ) * bins
@@ -87,7 +87,8 @@ def calculate_lift_opt_score(
     fit_threshold: float = 0.70,
     steepness: float = 20.0,
     power_weight: float = 0.25,
-    power_norm_cap: float = 0.50
+    power_norm_cap: float = 0.50,
+    penalty_type: str = "linear"
 ) -> float:
     """
     Computes an actuarial hyperparameter objective balancing calibration and separation.
@@ -101,11 +102,13 @@ def calculate_lift_opt_score(
     fit_threshold : float, default=0.70
         Minimum acceptable fit quality before heavy penalization
     steepness : float, default=20.0
-        Controls how sharply the penalty kicks in below threshold
+        Controls how sharply the penalty kicks in below threshold (sigmoid only)
     power_weight : float, default=0.25
         Relative importance of separation once fit is acceptable
     power_norm_cap : float, default=0.50
         Typical strong benchmark for model_power to scale to [0, 1]
+    penalty_type : str, default="linear"
+        Type of penalty: "linear" (gradual) or "sigmoid" (steep)
     
     Returns
     -------
@@ -114,29 +117,43 @@ def calculate_lift_opt_score(
         
     Notes
     -----
-    The sigmoid gate ensures that if fit drops below threshold, score degrades
-    rapidly regardless of power. This prevents optimizer from chasing separation
-    at the cost of calibration.
+    LINEAR PENALTY (recommended for HPO):
+        If fit >= threshold: penalty = 1.0
+        If fit < threshold: penalty = fit / threshold (linear 0→1)
+        Allows optimizer to distinguish between poor fits
     
-    Score = gate × (fit_quality + power_weight × norm_power)
+    SIGMOID PENALTY (legacy):
+        Uses sigmoid gate that collapses to 0 below threshold
+        Can cause all scores to be ~0 if none meet threshold
+    
+    Score = penalty × (fit_quality + power_weight × norm_power)
     
     where:
-    - gate: sigmoid penalty based on fit vs threshold
+    - penalty: based on fit vs threshold
     - norm_power: model_power normalized to [0,1] using soft saturation
     """
     # 1. Normalize model_power smoothly using soft saturation
     # Normalized power reaches ~0.63 at cap, asymptoting toward 1.0
     norm_power = 1.0 - np.exp(-model_power / power_norm_cap)
     
-    # 2. Compute smooth penalty gate based on fit quality
-    # Gate evaluates near 1.0 when fit > threshold; collapses to 0.0 when fit drops
-    gate = 1.0 / (1.0 + np.exp(-steepness * (fit_quality - fit_threshold)))
+    # 2. Compute penalty based on fit quality
+    if penalty_type == "linear":
+        # Linear penalty: gradually scales from 0 to 1
+        if fit_quality >= fit_threshold:
+            penalty = 1.0
+        else:
+            penalty = max(0.0, fit_quality / fit_threshold)
+    elif penalty_type == "sigmoid":
+        # Sigmoid penalty: steep drop below threshold
+        penalty = 1.0 / (1.0 + np.exp(-steepness * (fit_quality - fit_threshold)))
+    else:
+        raise ValueError(f"Unknown penalty_type: {penalty_type}. Use 'linear' or 'sigmoid'")
     
     # 3. Base composite score (fit-dominated)
     base_score = fit_quality + (power_weight * norm_power)
     
-    # 4. Gated final evaluation score
-    return float(gate * base_score)
+    # 4. Penalized final evaluation score
+    return float(penalty * base_score)
 
 
 def compute_fit_quality(y_true, y_pred, weights):

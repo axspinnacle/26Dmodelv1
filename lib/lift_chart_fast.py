@@ -41,28 +41,42 @@ def create_lift_chart(data, weight_name, bins=10, title="Lift Chart", y_max=4.0)
     w = df[weight_name]
     wsum = w.sum()
     cum_w = w.cumsum() / wsum
-    df['decile'] = np.ceil(cum_w * bins).astype(int).clip(1, bins)
+    # Floor-based decile assignment (no bias)
+    df['decile'] = np.floor(np.round(cum_w, 2) * bins).astype(int)
+    df['decile'] = np.where(df['decile'] + 1 > bins, bins, df['decile'] + 1)
     print(f"  [STEP 4] Done in {time.time()-t4:.3f}s")
     
     # Step 5: Aggregate by decile
     print(f"  [STEP 5] Aggregating by decile...")
     t5 = time.time()
     x = df.groupby('decile').agg({
-        weight_name: 'sum',
+        weight_name: ['sum', 'count'],  # Add count for record count
         'incurred_act': 'sum',
         'incurred_pred': 'sum',
         'denom': 'sum'
     }).reset_index()
+    
+    # Flatten column names (groupby with list creates MultiIndex columns)
+    x.columns = ['decile', weight_name, 'n_records', 'incurred_act', 'incurred_pred', 'denom']
     print(f"  [STEP 5] Done in {time.time()-t5:.3f}s")
     
-    # Calculate act/pred values
-    x['act'] = x['incurred_act'] / x['denom']
-    x['pred'] = x['incurred_pred'] / x['denom']
+    # Calculate act/pred values - both exposure-weighted and simple averages
+    # Exposure-weighted average: incurred / exposure
+    x['act_ee_weigh_avg'] = x['incurred_act'] / x[weight_name]
+    x['pred_ee_weigh_avg'] = x['incurred_pred'] / x[weight_name]
     
-    # Relativities
-    overall_pred = df['incurred_pred'].sum() / df['denom'].sum()
-    x['act_rel'] = x['act'] / overall_pred
-    x['pred_rel'] = x['pred'] / overall_pred
+    # Simple average: incurred / record count
+    x['act_simple_avg'] = x['incurred_act'] / x['denom']
+    x['pred_simple_avg'] = x['incurred_pred'] / x['denom']
+    
+    # Legacy columns for backward compatibility (use exposure-weighted)
+    x['act'] = x['act_ee_weigh_avg']
+    x['pred'] = x['pred_ee_weigh_avg']
+    
+    # Relativities (using exposure-weighted averages)
+    overall_pred = df['incurred_pred'].sum() / df[weight_name].sum()
+    x['act_rel'] = x['act_ee_weigh_avg'] / overall_pred
+    x['pred_rel'] = x['pred_ee_weigh_avg'] / overall_pred
     
     # Calculate weight percentage per decile
     x['weight_pct'] = (x[weight_name] / x[weight_name].sum()) * 100

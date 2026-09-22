@@ -1,5 +1,4 @@
 original_column,encoding_type,output_columns,n_categories,has_other,has_missing
-vin_date,skip,SKIPPED,0,False,False
 late_payments_raw,skip,SKIPPED,0,False,False
 veh_use_commute_ind,ordinal_0_5,veh_use_commute_ind,0,False,False
 veh_use_business_ind,ordinal_0_5,veh_use_business_ind,0,False,False
