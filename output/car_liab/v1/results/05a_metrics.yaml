@@ -1,11 +1,10 @@
-base_margin_applied: false
-best_iteration: 146
+best_iteration: 117
 monotone_constraints_applied: true
-n_features: 197
+n_features: 151
 stage: 05a_initial
 test:
-  mae: 197.2629044985016
-  rmse: 2554.2471119345414
+  mae: 240.78859346723343
+  rmse: 4213.720816594762
 train:
-  mae: 196.33996033255477
-  rmse: 2537.306473120995
+  mae: 239.0860012408955
+  rmse: 4146.176741313792

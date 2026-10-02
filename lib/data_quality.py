@@ -170,3 +170,41 @@ def summarize_duplicates(
     results['key_column'] = key_col
     
     return results
+
+
+def apply_exposure_floor(df, exposure_cols, floor_value, verbose=True):
+    """
+    Apply minimum floor to exposure columns.
+    
+    Args:
+        df: DataFrame
+        exposure_cols: List of exposure column names
+        floor_value: Minimum exposure value (e.g., 0.0833 for 1 month)
+        verbose: Print summary
+        
+    Returns:
+        DataFrame with floored exposures
+    """
+    import pandas as pd
+    
+    df = df.copy()
+    
+    if verbose:
+        print(f"\nApplying exposure floor: {floor_value}")
+    
+    for col in exposure_cols:
+        if col in df.columns:
+            n_below = (df[col] < floor_value).sum()
+            if n_below > 0:
+                df[col] = df[col].clip(lower=floor_value)
+                pct = n_below / len(df) * 100
+                if verbose:
+                    print(f"  {col}: Floored {n_below:,} records ({pct:.2f}%)")
+            else:
+                if verbose:
+                    print(f"  {col}: No records below floor")
+        else:
+            if verbose:
+                print(f"  {col}: Column not found")
+    
+    return df

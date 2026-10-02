@@ -1,111 +1,104 @@
-# CAR LIABILITY MODEL - Version 1
-# Configuration for pp_bi target (bodily injury pure premium)
-
 experiment:
-  name: "car_liab3p_v1"
-  description: "Car liability model - baseline"
-  target: "pp_bi"
-  exposure: "ee_bi_imps"
-  coverage: "liab"
-  vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
-  target_cap: 100000  # Cap extreme losses (affects 0.045% of data)
-
-# Run mode configuration
-run_mode: "debug2"  # "debug1", "debug2", or "prod"
-
+  name: car_liab3p_v1
+  description: Car liability model - baseline
+  target: pp_bi
+  exposure: ee_bi_imps
+  coverage: liab
+  vehicle_type: CAR
+  loss_cap: 100000
+  loss_type: bi
+  exposure_floor: 0.0833
+  exposure_columns:
+  - ee_bi_imps
+  - ee_pd_imps
+run_mode: debug2
 debug1:
-  train_folds: [1]
-  test_folds: [6]
-  holdout_folds: []       # Skip holdout
+  train_folds:
+  - 1
+  test_folds:
+  - 6
+  holdout_folds: []
   hpo_trials: 10
-
 debug2:
-  train_folds: [1, 2]
-  test_folds: [6, 7]      # Test on multiple folds
-  holdout_folds: [8]      # Test holdout logic with one fold
+  train_folds:
+  - 1
+  - 2
+  test_folds:
+  - 6
+  - 7
+  holdout_folds:
+  - 8
   hpo_trials: 20
-
 prod:
-  train_folds: [1, 2, 3, 4, 5]
-  test_folds: [6,7]
-  holdout_folds: [8, 9, 10]
+  train_folds:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  test_folds:
+  - 6
+  - 7
+  holdout_folds:
+  - 8
+  - 9
+  - 10
   hpo_trials: 20
-
-# Machine-specific configuration (selected automatically based on current.pc file)
-# The current.pc file contains a number (1-4) that determines which machine config to use
 machines:
   PC1:
-    # Not configured - add your paths here when setting up PC1
-    conda_env: "py311_26v1"
+    conda_env: py311_26v1
     paths:
       master_data_path: null
       aux_data_path: null
       output_path: null
   PC2:
-    # Linux server (carfax shared)
-    conda_env: "carfax26v1"
+    conda_env: carfax26v1
     paths:
-      master_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
-      aux_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
-      output_path: "/home/carfax_shared/data/2026_Dmodel_data"  # TODO: Change to output folder after testing
+      master_data_path: /home/carfax_shared/D model data steps/Master Datasets/car
+      aux_data_path: /home/carfax_shared/D model data steps/Master Datasets/car
+      output_path: /home/carfax_shared/data/2026_Dmodel_data
   PC3:
-    # Mac - Machine Learning Development local development under user aps
-    conda_env: "py311_26v1"
+    conda_env: py311_26v1
     paths:
-      master_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
-      aux_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
-      output_path: "output/car_liab/v1"  # Relative to project root
+      master_data_path: /Users/Mach/dev/aps/data/2026_Dmodel_data
+      aux_data_path: /Users/Mach/dev/aps/data/2026_Dmodel_data
+      output_path: output/car_liab/v1
   PC4:
-    # Not configured - add your paths here when setting up PC4
-    conda_env: "py311_26v1"
+    conda_env: py311_26v1
     paths:
       master_data_path: null
       aux_data_path: null
       output_path: null
-
-# Input data files (machine-agnostic file names)
-# NOTE: Master file does NOT have fold - must join with aux file
-# Aux file contains fold and depreciation factors
-# Actual paths are in machines.PCX.paths section above
 data:
-  master_file: "master_dataset_car.parquet"
-  aux_file: "car_with_dep_factor_fold_dedup.parquet"  # Deduplicated version (was: car_with_dep_factor_fold.parquet)
-  join_key: "vin_date"  # Column name for join (vindate or similar)
-  fold_column: "fold"   # Column in AUX file only
-  join_type: "inner"    # Inner join to keep only matched records
-  columns_to_load_file: "columns_to_load_during_dataassembly.csv"  # Subset of columns to load (performance)
-  control_model_file: "aux_dataset_car_vindate_ctl_no_duplicate.parquet"  # GLM predictions for base_margin
-  
-# Feature configuration
-# Features loaded from CSV file with category/range metadata
+  master_file: master_dataset_car.parquet
+  aux_file: car_with_dep_factor_fold_dedup.parquet
+  join_key: vin_date
+  fold_column: fold
+  join_type: inner
+  columns_to_load_file: columns_to_load_during_dataassembly.csv
+  control_model_file: aux_dataset_car_vindate_ctl_no_duplicate.parquet
 features:
-  inclusion_file: "columns_inclusion.csv"  # 90 features from CSV
-  exclusion_file: "exclusion.csv"          # Features to exclude per vehicle type
-  blank_file: null                          # Optional: columns to treat as blank
-  monotonicity_file: "monotonicity.csv"     # Monotonicity constraints per vehicle type
-
-# PCA Feature Engineering Configuration
+  inclusion_file: columns_inclusion.csv
+  exclusion_file: exclusion.csv
+  blank_file: null
+  monotonicity_file: monotonicity.csv
 feature_engineering:
   pca:
-    enabled: true                           # Toggle PCA feature engineering on/off
-    features_file: "pca_features.csv"       # CSV with column_name, pca_group, notes
-    group_column: "pca_group"               # Column name containing group tags
-    max_components: 5                       # Maximum components per group (takes priority if set)
-    variance_threshold: 0.95                # Keep components explaining 95% variance (fallback if max_components not set)
-    prefix_template: "pca_{group}_"         # {group} replaced with group name (e.g., pca_veh_char_0)
-
-# Model configuration
+    enabled: true
+    features_file: pca_features.csv
+    group_column: pca_group
+    max_components: 5
+    variance_threshold: 0.95
+    prefix_template: pca_{group}_
 model:
-  target_method: "residual"  # "residual" (GBM learns PP/GLM ratio) or "direct" (GBM learns PP)
+  target_method: residual
   use_glm_init: true
-  glm_init_transform: "log"
-  glm_prediction_column: "pred_pp_liab_3p"
-
-# XGBoost parameters
+  glm_init_transform: log
+  glm_prediction_column: pred_pp_liab_3p
 xgboost:
-  objective: "reg:tweedie"
+  objective: reg:tweedie
   tweedie_variance_power: 1.5
-  eval_metric: "tweedie-nloglik"
+  eval_metric: tweedie-nloglik
   learning_rate: 0.05
   max_depth: 4
   min_child_weight: 1000
@@ -113,85 +106,90 @@ xgboost:
   colsample_bytree: 1.0
   alpha: 10
   n_estimators: 500
-  early_stopping_rounds: 50  # Stop if no improvement for 50 iterations
-  tree_method: "hist"
-  device: "cpu"
+  early_stopping_rounds: 50
+  tree_method: hist
+  device: cpu
   random_state: 42
   verbosity: 1
-
-# Execution control
 execution:
   stages:
-    stage_01: false   # Data assembly
-    stage_02: false   # Data conditioning  
-    stage_03: false   # Verification
-    stage_04a: false  # PCA feature engineering
-    stage_04b: false   # Train/test split by fold
-    stage_04c: false   # Feature encoding + model prep
-    stage_05a: false   # Initial model fit (validation)
-    stage_05b: false   # Hyperparameter optimization
-    stage_05c: true   # Production model training
-    stage_06: false    # SHAP dataframe
-    stage_07: false    # SHAP analysis & plot from df
-    stage_08: false    # Scoring (holdout/new data)
-    stage_09: false    # State analysis
-  
+    stage_01: false
+    stage_02: false
+    stage_03: false
+    stage_04a: false
+    stage_04b: false
+    stage_04c: false
+    stage_05a: true
+    stage_05b: false
+    stage_05c: true
+    stage_06: true
+    stage_07: true
+    stage_08: true
+    stage_09: false
   stop_on_error: true
   cleanup_memory: true
-
-# Hyperparameter Optimization Configuration
 hyperparameter_optimization:
-  method: "optuna"             # "grid" (default, no extra deps) or "optuna" (optional)
-  n_trials: 100              # For optuna (if method="optuna")
-  timeout_minutes: 60        # Max time for optuna
-  param_grid:                # Search ranges for optuna or grid search
-    max_depth: [4, 5, 6]
-    learning_rate: [0.01, 0.05, 0.1]
-    min_child_weight: [100, 300, 500]
-    subsample: [0.8, 1.0]
-    colsample_bytree: [0.8, 1.0]
-    n_estimators: [300, 500]
-    tweedie_variance_power: [1.3, 1.5, 1.7]
-  scoring:                   # Actuarial lift optimization scoring
-    bins: 10                 # Number of deciles for lift calculation
-    fit_threshold: 0.70      # Minimum acceptable fit quality (0-1)
-    steepness: 20.0          # Sigmoid penalty sharpness below threshold
-    power_weight: 0.20       # Weight of model_power in combined score
-    power_norm_cap: 0.50     # Normalization cap for model_power
-
-# Scoring Configuration (holdout, new data, production)
+  method: optuna
+  n_trials: 100
+  timeout_minutes: 60
+  param_grid:
+    max_depth:
+    - 4
+    - 5
+    - 6
+    learning_rate:
+    - 0.01
+    - 0.05
+    - 0.1
+    min_child_weight:
+    - 100
+    - 300
+    - 500
+    subsample:
+    - 0.8
+    - 1.0
+    colsample_bytree:
+    - 0.8
+    - 1.0
+    n_estimators:
+    - 300
+    - 500
+    tweedie_variance_power:
+    - 1.3
+    - 1.5
+    - 1.7
+  scoring:
+    bins: 10
+    fit_threshold: 0.7
+    steepness: 20.0
+    power_weight: 0.2
+    power_norm_cap: 0.5
 scoring:
   holdout:
-    source: "master"          # Use master file with fold filter
-    folds: [8, 9, 10]
+    source: master
+    folds:
+    - 8
+    - 9
+    - 10
     has_target: true
-  # Example for new year data:
-  # year_2025:
-  #   source: "file"
-  #   data_dir: "/path/to/data"  # Optional, defaults to master_data_path
-  #   file: "data_2025.parquet"
-  #   has_target: true
-
-# State Analysis Configuration
 analysis:
-  slice_by: ["state"]         # Dimensions to slice by
+  slice_by:
+  - state
   datasets:
-    - name: "train"
-      file: "results/05c_predictions_train.parquet"
-    - name: "test"
-      file: "results/05c_predictions_test.parquet"
-    - name: "holdout"
-      file: "scoring/holdout/predictions.parquet"
-
-# SHAP Analysis Configuration
+  - name: train
+    file: results/05c_predictions_train.parquet
+  - name: test
+    file: results/05c_predictions_test.parquet
+  - name: holdout
+    file: scoring/holdout/predictions.parquet
 shap_analysis:
-  top_n_features: 40  # Number of top features to plot
-  datasets: ["train", "test"]  # Which datasets to analyze
-  
+  top_n_features: 40
+  datasets:
+  - train
+  - test
   residual_plot:
     round_value: 2
     print_table: true
-  
   shap_range_plot:
     shap_round_level: 3
     feature_round_to: 0.001

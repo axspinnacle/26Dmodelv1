@@ -10,7 +10,7 @@ groups:
     - pca_veh_char_4
     n_components: 5
   veh_hist:
-    cumulative_variance: 0.9646794574955365
+    cumulative_variance: 1.0000000000000002
     feature_names:
     - pca_veh_hist_0
     - pca_veh_hist_1

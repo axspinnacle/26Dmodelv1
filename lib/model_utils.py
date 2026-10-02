@@ -294,6 +294,7 @@ def apply_target_cap(
     verbose=True
 ):
     """
+    DEPRECATED: Use apply_loss_cap() instead.
     Apply cap to target variable to remove extreme outliers.
     
     Args:
@@ -326,6 +327,201 @@ def apply_target_cap(
         print(f"    Test: {n_cap_test:,} values")
     
     return pp_train_capped, pp_test_capped
+
+
+def apply_loss_cap(
+    train_df,
+    test_df,
+    loss_cap,
+    loss_type="bi",
+    pp_bi_col="pp_bi",
+    pp_pd_col="pp_pd",
+    ee_bi_col="ee_bi_imps",
+    ee_pd_col="ee_pd_imps",
+    exposure_floor=None,
+    verbose=True
+):
+    """
+    Apply loss cap and filter records based on loss type.
+    
+    Args:
+        train_df: Training dataframe
+        test_df: Test dataframe
+        loss_cap: Maximum allowed loss value
+        loss_type: "bi", "pd", or "bi+pd"
+        pp_bi_col: Column name for BI pure premium
+        pp_pd_col: Column name for PD pure premium
+        ee_bi_col: Column name for BI exposure
+        ee_pd_col: Column name for PD exposure
+        exposure_floor: Minimum exposure value (e.g., 0.0833 for 1 month)
+        verbose: Whether to print summary
+        
+    Returns:
+        Tuple of (train_filtered, test_filtered)
+    """
+    if loss_cap is None:
+        print("  No loss cap applied")
+        return train_df.copy(), test_df.copy()
+    
+    print(f"\n=== Applying Loss Cap: {loss_cap:,} (type: {loss_type}) ===")
+    
+    # 1. Filter records based on loss_type
+    if loss_type == "bi":
+        train_mask = train_df[ee_bi_col] > 0
+        test_mask = test_df[ee_bi_col] > 0
+        print(f"  Filter: Dropping records where {ee_bi_col} = 0")
+    elif loss_type == "pd":
+        train_mask = train_df[ee_pd_col] > 0
+        test_mask = test_df[ee_pd_col] > 0
+        print(f"  Filter: Dropping records where {ee_pd_col} = 0")
+    elif loss_type == "bi+pd":
+        train_mask = (train_df[ee_bi_col] > 0) & (train_df[ee_pd_col] > 0)
+        test_mask = (test_df[ee_bi_col] > 0) & (test_df[ee_pd_col] > 0)
+        print(f"  Filter: Dropping records where {ee_bi_col} = 0 OR {ee_pd_col} = 0")
+    else:
+        raise ValueError(f"Invalid loss_type: {loss_type}. Must be 'bi', 'pd', or 'bi+pd'")
+    
+    train_filtered = train_df[train_mask].copy()
+    test_filtered = test_df[test_mask].copy()
+    
+    print(f"  Records dropped - Train: {(~train_mask).sum():,}, Test: {(~test_mask).sum():,}")
+    print(f"  Records kept - Train: {len(train_filtered):,}, Test: {len(test_filtered):,}")
+    
+    # 2. Apply exposure floor (prevents extreme PP from tiny exposures)
+    if exposure_floor:
+        import numpy as np
+        n_floor_train_bi = (train_filtered[ee_bi_col] < exposure_floor).sum() if ee_bi_col in train_filtered.columns else 0
+        n_floor_test_bi = (test_filtered[ee_bi_col] < exposure_floor).sum() if ee_bi_col in test_filtered.columns else 0
+        
+        if ee_bi_col in train_filtered.columns:
+            train_filtered[ee_bi_col] = np.maximum(train_filtered[ee_bi_col], exposure_floor)
+        if ee_bi_col in test_filtered.columns:
+            test_filtered[ee_bi_col] = np.maximum(test_filtered[ee_bi_col], exposure_floor)
+        
+        if loss_type in ["bi+pd", "pd"]:
+            n_floor_train_pd = (train_filtered[ee_pd_col] < exposure_floor).sum() if ee_pd_col in train_filtered.columns else 0
+            n_floor_test_pd = (test_filtered[ee_pd_col] < exposure_floor).sum() if ee_pd_col in test_filtered.columns else 0
+            
+            if ee_pd_col in train_filtered.columns:
+                train_filtered[ee_pd_col] = np.maximum(train_filtered[ee_pd_col], exposure_floor)
+            if ee_pd_col in test_filtered.columns:
+                test_filtered[ee_pd_col] = np.maximum(test_filtered[ee_pd_col], exposure_floor)
+        
+        if verbose and (n_floor_train_bi + n_floor_test_bi > 0):
+            print(f"  Exposure floor ({exposure_floor}):")
+            print(f"    {ee_bi_col} - Train: {n_floor_train_bi:,}, Test: {n_floor_test_bi:,}")
+            if loss_type in ["bi+pd", "pd"]:
+                print(f"    {ee_pd_col} - Train: {n_floor_train_pd:,}, Test: {n_floor_test_pd:,}")
+    
+    # 3. Calculate loss
+    if loss_type == "bi":
+        loss_train = train_filtered[pp_bi_col] * train_filtered[ee_bi_col]
+        loss_test = test_filtered[pp_bi_col] * test_filtered[ee_bi_col]
+    elif loss_type == "pd":
+        loss_train = train_filtered[pp_pd_col] * train_filtered[ee_pd_col]
+        loss_test = test_filtered[pp_pd_col] * test_filtered[ee_pd_col]
+    elif loss_type == "bi+pd":
+        loss_bi_train = train_filtered[pp_bi_col] * train_filtered[ee_bi_col]
+        loss_pd_train = train_filtered[pp_pd_col] * train_filtered[ee_pd_col]
+        loss_train = loss_bi_train + loss_pd_train
+        
+        loss_bi_test = test_filtered[pp_bi_col] * test_filtered[ee_bi_col]
+        loss_pd_test = test_filtered[pp_pd_col] * test_filtered[ee_pd_col]
+        loss_test = loss_bi_test + loss_pd_test
+    
+    # 4. Apply cap
+    n_cap_train = (loss_train > loss_cap).sum()
+    n_cap_test = (loss_test > loss_cap).sum()
+    
+    if loss_type == "bi+pd":
+        # Proportional scaling for combined loss
+        cap_mask_train = loss_train > loss_cap
+        cap_mask_test = loss_test > loss_cap
+        
+        if cap_mask_train.any():
+            ratio_train = loss_cap / loss_train[cap_mask_train]
+            train_filtered.loc[cap_mask_train, pp_bi_col] = train_filtered.loc[cap_mask_train, pp_bi_col] * ratio_train
+            train_filtered.loc[cap_mask_train, pp_pd_col] = train_filtered.loc[cap_mask_train, pp_pd_col] * ratio_train
+        
+        if cap_mask_test.any():
+            ratio_test = loss_cap / loss_test[cap_mask_test]
+            test_filtered.loc[cap_mask_test, pp_bi_col] = test_filtered.loc[cap_mask_test, pp_bi_col] * ratio_test
+            test_filtered.loc[cap_mask_test, pp_pd_col] = test_filtered.loc[cap_mask_test, pp_pd_col] * ratio_test
+    else:
+        # Single loss type - direct capping
+        pp_col = pp_bi_col if loss_type == "bi" else pp_pd_col
+        ee_col = ee_bi_col if loss_type == "bi" else ee_pd_col
+        
+        cap_mask_train = loss_train > loss_cap
+        cap_mask_test = loss_test > loss_cap
+        
+        if cap_mask_train.any():
+            train_filtered.loc[cap_mask_train, pp_col] = loss_cap / train_filtered.loc[cap_mask_train, ee_col]
+        
+        if cap_mask_test.any():
+            test_filtered.loc[cap_mask_test, pp_col] = loss_cap / test_filtered.loc[cap_mask_test, ee_col]
+    
+    if verbose and (n_cap_train + n_cap_test > 0):
+        print(f"  Loss capped at {loss_cap:,}:")
+        print(f"    Train: {n_cap_train:,} records ({n_cap_train/len(train_filtered)*100:.4f}%)")
+        print(f"    Test: {n_cap_test:,} records ({n_cap_test/len(test_filtered)*100:.4f}%)")
+    
+    return train_filtered, test_filtered
+
+
+def generate_top_targets_report(
+    df,
+    target_col,
+    pp_bi_col="pp_bi",
+    pp_pd_col="pp_pd",
+    ee_bi_col="ee_bi_imps",
+    ee_pd_col="ee_pd_imps",
+    incurred_bi_col="incurred_raw_bi_imps",
+    incurred_pd_col="incurred_raw_pd_imps",
+    glm_col=None,
+    n=100
+):
+    """
+    Generate report of top N records by target value (before capping).
+    
+    Args:
+        df: Dataframe with all columns
+        target_col: Target column name (e.g., "target" = pp/glm)
+        pp_bi_col, pp_pd_col: PP column names
+        ee_bi_col, ee_pd_col: Exposure column names
+        incurred_bi_col, incurred_pd_col: Incurred loss columns
+        glm_col: GLM prediction column (optional)
+        n: Number of top records
+        
+    Returns:
+        DataFrame with top N records
+    """
+    # Get top N by target
+    top_n = df.nlargest(n, target_col).copy()
+    
+    # Calculate losses
+    top_n['loss_bi'] = top_n[pp_bi_col] * top_n[ee_bi_col]
+    if pp_pd_col in top_n.columns and ee_pd_col in top_n.columns:
+        top_n['loss_pd'] = top_n[pp_pd_col] * top_n[ee_pd_col]
+        top_n['loss_total'] = top_n['loss_bi'] + top_n['loss_pd']
+    else:
+        top_n['loss_pd'] = 0
+        top_n['loss_total'] = top_n['loss_bi']
+    
+    # Select columns for report
+    report_cols = [target_col, pp_bi_col, ee_bi_col, 'loss_bi']
+    
+    if pp_pd_col in top_n.columns:
+        report_cols.extend([pp_pd_col, ee_pd_col, 'loss_pd', 'loss_total'])
+    
+    if incurred_bi_col in top_n.columns:
+        report_cols.append(incurred_bi_col)
+    if incurred_pd_col in top_n.columns:
+        report_cols.append(incurred_pd_col)
+    if glm_col and glm_col in top_n.columns:
+        report_cols.append(glm_col)
+    
+    return top_n[report_cols]
 
 
 def transform_target(
@@ -413,6 +609,50 @@ def predict_with_transform(
     gbm_pred_raw = pd.Series(model.predict(X, validate_features=False), index=X.index)
     pp_predicted = inverse_transform(gbm_pred_raw, glm_pred, target_method)
     return gbm_pred_raw, pp_predicted
+
+
+
+
+def load_base_margin(output_base, use_base_margin=False, dataset="train", verbose=True):
+    """
+    Load base_margin file if enabled.
+    
+    Args:
+        output_base: Path to output directory
+        use_base_margin: Whether to load base_margin
+        dataset: "train", "test", or score name (e.g., "holdout")
+        verbose: Print status messages
+    
+    Returns:
+        numpy array of base_margin values, or None if disabled/not found
+    """
+    import os
+    import pandas as pd
+    
+    if not use_base_margin:
+        if verbose:
+            print(f"\n* Base margin disabled (use_base_margin=False)")
+        return None
+    
+    # Determine file path based on dataset type
+    if dataset in ["train", "test"]:
+        file_path = f"{output_base}/data/04c_{dataset}_base_margin.parquet"
+    else:
+        # Scoring data
+        file_path = f"{output_base}/data/04c_score_{dataset}_base_margin.parquet"
+    
+    if os.path.exists(file_path):
+        if verbose:
+            print(f"\n* Loading base_margin ({dataset})...")
+        base_margin = pd.read_parquet(file_path)["base_margin"].values
+        if verbose:
+            print(f"  mean={base_margin.mean():.4f}, count={len(base_margin):,}")
+        return base_margin
+    else:
+        if verbose:
+            print(f"\n* Base margin file not found: {file_path}")
+            print(f"  Continuing without base_margin")
+        return None
 
 
 def save_predictions(
@@ -567,3 +807,109 @@ def load_glm_for_scoring(df,cfg,score_cfg,pc_id,target_method):
     paths=cfg["machines"][pc_id]["paths"]
     # Use drop_missing=True to get matched indices
     return load_glm_predictions(paths["aux_data_path"],cfg["data"]["control_model_file"],df,join_key,glm_col,drop_missing=True)
+
+
+
+def create_model_analysis_table(
+    df,
+    target,
+    pred_gbm,
+    glm_pred,
+    exposure,
+    pp_actual_from_capped,
+    pred_pp,
+    dataset_name="data"
+):
+    """
+    Create analysis table with incurred calculations.
+    
+    Args:
+        df: Original dataframe (for index)
+        target: GBM target (pp/glm for residual)
+        pred_gbm: GBM raw prediction
+        glm_pred: GLM prediction
+        exposure: Exposure values
+        pp_actual_from_capped: PP from capped loss (capped_loss / ee)
+        pred_pp: Predicted PP (pred_gbm * glm for residual)
+    
+    Returns:
+        DataFrame with analysis columns (formulas in column names)
+    """
+    import pandas as pd
+    
+    analysis = pd.DataFrame(index=df.index)
+    
+    # Basic inputs
+    analysis['exposure (ee)'] = exposure
+    analysis['glm_pred (glm)'] = glm_pred
+    analysis['pp_from_capped_loss (capped_loss/ee)'] = pp_actual_from_capped
+    analysis['pred_pp (pred_gbm * glm)'] = pred_pp
+    analysis['target (pp_capped / glm)'] = target
+    analysis['pred_gbm (GBM output)'] = pred_gbm
+    
+    # Incurred calculations
+    analysis['incurred_capped (pp_capped * ee)'] = pp_actual_from_capped * exposure
+    analysis['incurred_pred (pred_pp * ee)'] = pred_pp * exposure
+    analysis['incurred_from_target (target * glm * ee)'] = target * glm_pred * exposure
+    analysis['incurred_from_pred_gbm (pred_gbm * glm * ee)'] = pred_gbm * glm_pred * exposure
+    
+    # Weighted by exposure
+    analysis['target_weighted (target * ee)'] = target * exposure
+    analysis['pred_gbm_weighted (pred_gbm * ee)'] = pred_gbm * exposure
+    
+    return analysis
+
+
+def create_decile_analysis_table(
+    analysis_df,
+    pred_col='pred_pp (pred_gbm * glm)',
+    exposure_col='exposure (ee)',
+    n_deciles=10
+):
+    """
+    Aggregate analysis table by decile.
+    
+    Args:
+        analysis_df: Output from create_model_analysis_table()
+        pred_col: Column for decile ranking
+        exposure_col: Exposure column
+        n_deciles: Number of deciles
+        
+    Returns:
+        DataFrame with decile-level aggregations
+    """
+    import pandas as pd
+    
+    df = analysis_df.copy()
+    df['decile'] = pd.qcut(df[pred_col].rank(method='first'), n_deciles, labels=range(1, n_deciles + 1))
+    
+    agg_cols = {
+        'exposure (ee)': 'sum',
+        'incurred_capped (pp_capped * ee)': 'sum',
+        'incurred_pred (pred_pp * ee)': 'sum',
+        'incurred_from_target (target * glm * ee)': 'sum',
+        'incurred_from_pred_gbm (pred_gbm * glm * ee)': 'sum',
+        'target_weighted (target * ee)': 'sum',
+        'pred_gbm_weighted (pred_gbm * ee)': 'sum',
+    }
+    
+    decile_table = df.groupby('decile').agg(
+        n_records=('decile', 'count'),
+        **{k: (k, v) for k, v in agg_cols.items()}
+    ).reset_index()
+    
+    # Add averages
+    decile_table['avg_target (target_wt / ee)'] = (
+        decile_table['target_weighted (target * ee)'] / decile_table['exposure (ee)']
+    )
+    decile_table['avg_pred_gbm (pred_gbm_wt / ee)'] = (
+        decile_table['pred_gbm_weighted (pred_gbm * ee)'] / decile_table['exposure (ee)']
+    )
+    decile_table['avg_pp_act (incurred_capped / ee)'] = (
+        decile_table['incurred_capped (pp_capped * ee)'] / decile_table['exposure (ee)']
+    )
+    decile_table['avg_pp_pred (incurred_pred / ee)'] = (
+        decile_table['incurred_pred (pred_pp * ee)'] / decile_table['exposure (ee)']
+    )
+    
+    return decile_table

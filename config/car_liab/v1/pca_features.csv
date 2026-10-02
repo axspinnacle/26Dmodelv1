@@ -2,8 +2,7 @@ column_name,pca_group,notes
 vin_date,,Join key - never in PCA
 py,veh_hist,Policy year
 model_year_raw,veh_hist,Vehicle model year
-CALC_VEH_AGE,veh_hist,Calculated vehicle age
-veh_value_dep,,Vehicle value after depreciation; we donÕt want that as a feature
+veh_value_dep,,Vehicle value after depreciation; we donï¿½t want that as a feature
 Dep_factor,,Depreciation factor
 cef_first_branded_ind,veh_hist,First branded title indicator
 cef_first_cpo_ind,veh_hist,First CPO indicator
