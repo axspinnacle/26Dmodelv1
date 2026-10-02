@@ -15,6 +15,9 @@ def create_lift_chart(data, weight_name, bins=10, title="Lift Chart", y_max=4.0)
     print(f"  [STEP 1] Creating column list...")
     t1 = time.time()
     cols_needed = ['pred', weight_name, 'incurred_act', 'incurred_pred', 'denom']
+    # Optional GBM-only columns (if available)
+    if 'incurred_act_gbm' in data.columns:
+        cols_needed.extend(['incurred_act_gbm', 'incurred_pred_gbm'])
     print(f"  [STEP 1] Done in {time.time()-t1:.3f}s")
     
     # Step 2: Extract columns
@@ -49,15 +52,26 @@ def create_lift_chart(data, weight_name, bins=10, title="Lift Chart", y_max=4.0)
     # Step 5: Aggregate by decile
     print(f"  [STEP 5] Aggregating by decile...")
     t5 = time.time()
-    x = df.groupby('decile').agg({
-        weight_name: ['sum', 'count'],  # Add count for record count
+    # Build aggregation dict
+    agg_dict = {
+        weight_name: ['sum', 'count'],
         'incurred_act': 'sum',
         'incurred_pred': 'sum',
         'denom': 'sum'
-    }).reset_index()
+    }
+    # Add GBM columns if present
+    has_gbm = 'incurred_act_gbm' in df.columns
+    if has_gbm:
+        agg_dict['incurred_act_gbm'] = 'sum'
+        agg_dict['incurred_pred_gbm'] = 'sum'
+    
+    x = df.groupby('decile').agg(agg_dict).reset_index()
     
     # Flatten column names (groupby with list creates MultiIndex columns)
-    x.columns = ['decile', weight_name, 'n_records', 'incurred_act', 'incurred_pred', 'denom']
+    if has_gbm:
+        x.columns = ['decile', weight_name, 'n_records', 'incurred_act', 'incurred_pred', 'denom', 'incurred_act_gbm', 'incurred_pred_gbm']
+    else:
+        x.columns = ['decile', weight_name, 'n_records', 'incurred_act', 'incurred_pred', 'denom']
     print(f"  [STEP 5] Done in {time.time()-t5:.3f}s")
     
     # Calculate act/pred values - both exposure-weighted and simple averages
@@ -80,6 +94,15 @@ def create_lift_chart(data, weight_name, bins=10, title="Lift Chart", y_max=4.0)
     
     # Calculate weight percentage per decile
     x['weight_pct'] = (x[weight_name] / x[weight_name].sum()) * 100
+    
+    # GBM-only columns (if present)
+    if has_gbm:
+        # Exposure-weighted average ratios
+        x['act_gbm_ee_weigh_avg'] = x['incurred_act_gbm'] / x[weight_name]
+        x['pred_gbm_ee_weigh_avg'] = x['incurred_pred_gbm'] / x[weight_name]
+        # Simple average ratios
+        x['act_gbm_simple_avg'] = x['incurred_act_gbm'] / x['denom']
+        x['pred_gbm_simple_avg'] = x['incurred_pred_gbm'] / x['denom']
     
     # Plot
     print(f"  Creating plot...")
