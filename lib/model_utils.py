@@ -469,6 +469,109 @@ def apply_loss_cap(
     return train_filtered, test_filtered
 
 
+def apply_loss_cap_single(
+    df,
+    loss_cap,
+    loss_type="bi",
+    pp_bi_col="pp_bi",
+    pp_pd_col="pp_pd",
+    ee_bi_col="ee_bi_imps",
+    ee_pd_col="ee_pd_imps",
+    exposure_floor=None,
+    verbose=True
+):
+    """
+    Apply loss cap and exposure floor to a single dataframe (for scoring).
+    Similar to apply_loss_cap but for one dataset.
+    
+    Args:
+        df: Input dataframe
+        loss_cap: Maximum allowed loss value
+        loss_type: "bi", "pd", or "bi+pd"
+        pp_bi_col: Column name for BI pure premium
+        pp_pd_col: Column name for PD pure premium
+        ee_bi_col: Column name for BI exposure
+        ee_pd_col: Column name for PD exposure
+        exposure_floor: Minimum exposure value (e.g., 0.0833)
+        verbose: Whether to print summary
+        
+    Returns:
+        Filtered and capped dataframe
+    """
+    if loss_cap is None and exposure_floor is None:
+        if verbose:
+            print("  No loss cap or exposure floor applied")
+        return df.copy()
+    
+    df_filtered = df.copy()
+    
+    # 1. Filter records based on loss_type
+    if loss_type == "bi":
+        mask = df_filtered[ee_bi_col] > 0
+        if verbose:
+            print(f"  Filter: Dropping {(~mask).sum():,} records where {ee_bi_col} = 0")
+        df_filtered = df_filtered[mask].copy()
+    elif loss_type == "pd":
+        mask = df_filtered[ee_pd_col] > 0
+        if verbose:
+            print(f"  Filter: Dropping {(~mask).sum():,} records where {ee_pd_col} = 0")
+        df_filtered = df_filtered[mask].copy()
+    elif loss_type == "bi+pd":
+        mask = (df_filtered[ee_bi_col] > 0) & (df_filtered[ee_pd_col] > 0)
+        if verbose:
+            print(f"  Filter: Dropping {(~mask).sum():,} records where exposure = 0")
+        df_filtered = df_filtered[mask].copy()
+    
+    # 2. Apply exposure floor
+    if exposure_floor:
+        import numpy as np
+        n_floor_bi = (df_filtered[ee_bi_col] < exposure_floor).sum() if ee_bi_col in df_filtered.columns else 0
+        
+        if ee_bi_col in df_filtered.columns:
+            df_filtered[ee_bi_col] = np.maximum(df_filtered[ee_bi_col], exposure_floor)
+        
+        if loss_type in ["bi+pd", "pd"]:
+            n_floor_pd = (df_filtered[ee_pd_col] < exposure_floor).sum() if ee_pd_col in df_filtered.columns else 0
+            if ee_pd_col in df_filtered.columns:
+                df_filtered[ee_pd_col] = np.maximum(df_filtered[ee_pd_col], exposure_floor)
+        
+        if verbose and n_floor_bi > 0:
+            print(f"  Exposure floor ({exposure_floor}): {n_floor_bi:,} records adjusted")
+    
+    # 3. Apply loss cap (if provided)
+    if loss_cap:
+        if loss_type == "bi":
+            loss = df_filtered[pp_bi_col] * df_filtered[ee_bi_col]
+        elif loss_type == "pd":
+            loss = df_filtered[pp_pd_col] * df_filtered[ee_pd_col]
+        elif loss_type == "bi+pd":
+            loss = (df_filtered[pp_bi_col] * df_filtered[ee_bi_col] + 
+                   df_filtered[pp_pd_col] * df_filtered[ee_pd_col])
+        
+        n_cap = (loss > loss_cap).sum()
+        
+        if loss_type == "bi+pd":
+            cap_mask = loss > loss_cap
+            if cap_mask.any():
+                ratio = loss_cap / loss[cap_mask]
+                df_filtered.loc[cap_mask, pp_bi_col] = df_filtered.loc[cap_mask, pp_bi_col] * ratio
+                df_filtered.loc[cap_mask, pp_pd_col] = df_filtered.loc[cap_mask, pp_pd_col] * ratio
+        else:
+            pp_col = pp_bi_col if loss_type == "bi" else pp_pd_col
+            ee_col = ee_bi_col if loss_type == "bi" else ee_pd_col
+            cap_mask = loss > loss_cap
+            if cap_mask.any():
+                df_filtered.loc[cap_mask, pp_col] = loss_cap / df_filtered.loc[cap_mask, ee_col]
+        
+        if verbose and n_cap > 0:
+            print(f"  Loss capped at {loss_cap:,}: {n_cap:,} records ({n_cap/len(df_filtered)*100:.4f}%)")
+    
+    if verbose:
+        print(f"  Final: {len(df_filtered):,} records")
+    
+    return df_filtered
+
+
 def generate_top_targets_report(
     df,
     target_col,
@@ -662,6 +765,7 @@ def save_predictions(
     y_actual: pd.Series,
     y_pred: pd.Series,
     exposure: pd.Series,
+    index: pd.Index = None,
     **extra_cols
 ) -> str:
     """
@@ -674,7 +778,8 @@ def save_predictions(
         y_actual: Actual target values
         y_pred: Predicted values
         exposure: Exposure/weights
-        **extra_cols: Additional columns to include (e.g., vin_date=..., fold=...)
+        index: Index to use (e.g., train_orig.index with vin_date)
+        **extra_cols: Additional columns to include (e.g., fold=...)
         
     Returns:
         Path to saved file
@@ -691,17 +796,19 @@ def save_predictions(
         "exposure": exposure.values if isinstance(exposure, pd.Series) else exposure
     })
     
-    # Preserve index from y_actual if it has one (e.g., vin_date)
-    if isinstance(y_actual, pd.Series) and y_actual.index.name is not None:
+    # Set index if provided (e.g., vin_date from train_orig.index)
+    if index is not None:
+        df.index = index
+    elif isinstance(y_actual, pd.Series) and y_actual.index.name is not None:
         df.index = y_actual.index
     
     # Add extra columns
     for col_name, col_data in extra_cols.items():
         df[col_name] = col_data
     
-    # Save with reset_index to make index a regular column (for portability)
+    # Save with index preserved (vin_date as index for internal use)
     output_file = f"{results_dir}/{stage}_predictions_{split}.parquet"
-    df.reset_index().to_parquet(output_file, index=False)
+    df.to_parquet(output_file, index=True)
     
     return output_file
 
@@ -715,7 +822,8 @@ def save_debug_output(
     glm_pred: pd.Series,
     gbm_pred_raw: pd.Series,
     pp_predicted: pd.Series,
-    exposure: pd.Series
+    exposure: pd.Series,
+    index: pd.Index = None
 ) -> str:
     """
     Save full debug output with all columns for analysis.
@@ -730,6 +838,7 @@ def save_debug_output(
         gbm_pred_raw: Raw GBM output (ratio or PP depending on method)
         pp_predicted: Final PP predictions
         exposure: Exposure values
+        index: Index to use (e.g., train_orig.index with vin_date)
         
     Returns:
         Path to saved file
@@ -774,6 +883,10 @@ def save_debug_output(
         else:
             if source_col in data_orig.columns:
                 debug_df[target_col] = data_orig[source_col]
+    
+    # Set index if provided
+    if index is not None:
+        debug_df.index = index
     
     # Save
     output_file = f"{results_dir}/{stage}_debug_{split}.parquet"

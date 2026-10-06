@@ -1,0 +1,1 @@
+v1_1_Liab20PercentData_goodresults_Oct6_v1 - good results with 20% data. team liked it. underbias at top deciles caused question about running experiment with 75K, 125K caps. 

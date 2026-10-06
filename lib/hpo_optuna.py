@@ -76,20 +76,20 @@ def run_optuna_search(
         pred_test_raw = model.predict(X_test)
         
         # Apply inverse transform if using residual method
-        # Maintain index alignment: w_test has vin_date index, use it for all Series
+        # Maintain index alignment: X_test has vin_date index, use it for all Series
         if target_method == "residual":
             if glm_pred_test is None:
                 raise ValueError("glm_pred_test required for residual method")
-            # Create Series with proper index from w_test (which has vin_date from test_orig)
-            pred_test_series = pd.Series(pred_test_raw, index=w_test.index)
-            y_test_series = pd.Series(y_test, index=w_test.index)
+            # Create Series with proper index from X_test (which has vin_date from test_orig)
+            pred_test_series = pd.Series(pred_test_raw, index=X_test.index)
+            y_test_series = pd.Series(y_test, index=X_test.index)
             
             # inverse_transform preserves Series type and index
             pred_test_pp = inverse_transform(pred_test_series, glm_pred_test, target_method)
             y_test_pp = inverse_transform(y_test_series, glm_pred_test, target_method)
         else:
-            pred_test_pp = pd.Series(pred_test_raw, index=w_test.index)
-            y_test_pp = pd.Series(y_test, index=w_test.index)
+            pred_test_pp = pd.Series(pred_test_raw, index=X_test.index)
+            y_test_pp = pd.Series(y_test, index=X_test.index)
         
         # Prepare data for metrics (using PP space)
         # All Series now have matching vin_date index - no alignment errors

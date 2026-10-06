@@ -1,0 +1,20 @@
+enabled: true
+groups:
+  veh_char:
+    cumulative_variance: 0.5192566496025048
+    feature_names:
+    - pca_veh_char_0
+    - pca_veh_char_1
+    - pca_veh_char_2
+    - pca_veh_char_3
+    - pca_veh_char_4
+    n_components: 5
+  veh_hist:
+    cumulative_variance: 1.0000000000000002
+    feature_names:
+    - pca_veh_hist_0
+    - pca_veh_hist_1
+    - pca_veh_hist_2
+    - pca_veh_hist_3
+    - pca_veh_hist_4
+    n_components: 5

@@ -1,0 +1,10 @@
+best_iteration: 117
+monotone_constraints_applied: true
+n_features: 151
+stage: 05a_initial
+test:
+  mae: 240.78859346723343
+  rmse: 4213.720816594762
+train:
+  mae: 239.0860012408955
+  rmse: 4146.176741313792

@@ -221,10 +221,66 @@ def create_feature_importance_plot(shagg_df, top_n=20):
     return fig
 
 
+def create_shap_beeswarm(shap_df, feature_df, top_n=20, weight_col='weight', max_display=20):
+    """
+    Create standard SHAP beeswarm plot with individual dots colored by feature value.
+    Shows the relationship between feature values (color) and SHAP contributions (x-axis).
+    
+    Args:
+        shap_df: DataFrame with SHAP values (rows=samples, cols=features)
+        feature_df: DataFrame with original feature values (same index as shap_df)
+        top_n: Number of top features to plot
+        weight_col: Weight column name in shap_df
+        max_display: Max features to display (same as top_n typically)
+    
+    Returns:
+        fig: matplotlib figure
+    
+    Note:
+        - Each dot is a record
+        - X-axis: SHAP value (impact on prediction)
+        - Color: Feature value (red=high, blue=low)
+        - For residual method, SHAP explains log(PP/GLM)
+    """
+    import shap
+    print(f"  Creating SHAP beeswarm for {len(shap_df):,} samples...")
+    
+    # Get top features by weighted importance
+    shagg, _, shagg2 = compute_shap_aggregate(shap_df, weight_col=weight_col)
+    top_features = shagg2.head(top_n)['field'].tolist()
+    
+    # Filter to top features
+    shap_vals = shap_df[top_features].values
+    feature_vals = feature_df[top_features].values
+    
+    # Get base values if available
+    base_values = shap_df['base_value'].values if 'base_value' in shap_df.columns else None
+    
+    # Create SHAP Explanation object
+    explanation = shap.Explanation(
+        values=shap_vals,
+        base_values=base_values,
+        data=feature_vals,
+        feature_names=top_features
+    )
+    
+    # Create beeswarm plot
+    fig = plt.figure(figsize=(10, max(6, len(top_features) * 0.4)))
+    shap.plots.beeswarm(explanation, max_display=max_display, show=False)
+    plt.tight_layout()
+    
+    print(f"  Beeswarm created with {len(top_features)} features")
+    return fig
+
+
 def create_fast_shap_summary(shap_df, feature_df, top_n=20, weight_col='weight', n_quantiles=20):
     """
     Fast SHAP summary plot using percentile bands instead of scatter.
     Uses 100% of data, plots aggregated percentiles - instant rendering.
+    
+    LIMITATION: This plot does NOT show the relationship between feature values
+    and SHAP contributions. Each feature has one colored band, hiding individual
+    record patterns. Use create_shap_beeswarm() for proper interpretation.
     
     Args:
         shap_df: DataFrame with SHAP values (rows=samples, cols=features)

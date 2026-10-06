@@ -1,0 +1,7 @@
+fit_quality: 0.7074417122833425
+mae: 252.28269026719016
+model_power: 0.42740918761603947
+n_rows: 6445577
+n_rows_with_nan: 0
+rmse: 7329.263777639063
+score_name: holdout
