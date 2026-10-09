@@ -1,0 +1,12 @@
+config_path: config/car_pip/v1
+duration_seconds: 208.787693
+end_time: '2026-10-09T09:26:19.436747'
+experiment: car_pip_v1
+results:
+  stage_01: success
+  stage_02: success
+  stage_03: success
+  stage_04a: success
+  stage_04b: success
+  stage_04c: failed
+start_time: '2026-10-09T09:22:50.649054'

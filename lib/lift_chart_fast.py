@@ -137,3 +137,158 @@ def create_lift_chart(data, weight_name, bins=10, title="Lift Chart", y_max=4.0)
     print(f"  TOTAL TIME: {time.time()-t0:.1f}s")
     
     return fig, x
+
+
+def generate_scoring_lift_chart(
+    predictions,
+    target_values,
+    exposure_values,
+    exposure_col,
+    output_dir,
+    output_base,
+    title_prefix="08 Scoring",
+    score_name="holdout",
+    suffix="",
+    display_chart=True
+):
+    """
+    Generate and save a lift chart for scoring results.
+    
+    Args:
+        predictions: Series of model predictions (PP)
+        target_values: Series of actual target values (PP) - capped or uncapped
+        exposure_values: Series of exposure values
+        exposure_col: Name of exposure column (for chart)
+        output_dir: Directory to save chart PNG
+        output_base: Base output path for CSV
+        title_prefix: Chart title prefix
+        score_name: Score name for title
+        suffix: Optional suffix for filenames (e.g., "_uncapped")
+        display_chart: Whether to display in notebook
+        
+    Returns:
+        DataFrame with decile summary
+    """
+    import matplotlib.pyplot as plt
+    from IPython.display import Image, display
+    
+    print(f'\n* Creating lift chart{suffix}...')
+    
+    # Prepare dataframe for lift chart
+    lift_df = pd.DataFrame({
+        'prediction': predictions,
+        'pred': predictions,
+        'incurred_act': target_values.values * exposure_values.values,
+        'incurred_pred': predictions.values * exposure_values.values,
+        'denom': 1,
+        exposure_col: exposure_values.values
+    })
+    
+    # Remove NaN rows
+    lift_df = lift_df.dropna()
+    
+    print(f'  Creating chart for {len(lift_df):,} rows...')
+    
+    # Create lift chart
+    fig, table = create_lift_chart(
+        lift_df,
+        exposure_col,
+        bins=10,
+        title=f'{title_prefix}: {score_name.title()} Lift Chart{suffix.replace("_", " ").title()}'
+    )
+    
+    # Save chart
+    chart_file = f'{output_dir}/lift_chart{suffix}.png'
+    fig.savefig(chart_file, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print(f'  Saved: {chart_file}')
+    
+    # Display in notebook
+    if display_chart:
+        display(Image(chart_file))
+        print(f'\nDecile summary:')
+        cols_to_show = ['decile', 'n_records', exposure_col, 'incurred_act', 'incurred_pred', 
+                        'act_ee_weigh_avg', 'act_simple_avg', 'pred_ee_weigh_avg', 'pred_simple_avg']
+        print(table[cols_to_show].to_string(index=False))
+    
+    # Save table
+    table.to_csv(f"{output_base}/results/08_lift{suffix}_table.csv", index=False)
+    
+    return table
+
+
+def generate_training_lift_chart(
+    data_df,
+    predictions,
+    target_values,
+    exposure_values,
+    exposure_col,
+    output_base,
+    stage="05c",
+    dataset="train",
+    suffix="",
+    display_chart=True
+):
+    """
+    Generate and save a lift chart for training/test data.
+    
+    Args:
+        data_df: Original dataframe (train_orig or test_orig) with 'pred' column
+        predictions: Series of model predictions (PP)
+        target_values: Series of actual target values (PP) - capped or uncapped
+        exposure_values: Series/array of exposure values
+        exposure_col: Name of exposure column
+        output_base: Base output path
+        stage: Stage name (e.g., "05c")
+        dataset: "train" or "test"
+        suffix: Optional suffix for filenames (e.g., "_uncapped")
+        display_chart: Whether to display in notebook
+        
+    Returns:
+        DataFrame with decile summary
+    """
+    import matplotlib.pyplot as plt
+    from IPython.display import Image, display
+    
+    print(f'\n* Creating {dataset} lift chart{suffix}...')
+    
+    # Prepare dataframe for lift chart
+    lift_df = pd.DataFrame({
+        'pred': predictions,
+        'incurred_act': target_values * exposure_values,
+        'incurred_pred': predictions * exposure_values,
+        'denom': 1,
+        exposure_col: exposure_values
+    })
+    
+    # Remove NaN rows
+    lift_df = lift_df.dropna()
+    
+    print(f'  Creating chart for {len(lift_df):,} rows...')
+    
+    # Create lift chart
+    fig, table = create_lift_chart(
+        lift_df,
+        exposure_col,
+        bins=10,
+        title=f'{stage} Production {dataset.title()} Lift Chart{suffix.replace("_", " ").title()}'
+    )
+    
+    # Save chart
+    chart_file = f'{output_base}/results/{stage}_lift_{dataset}{suffix}.png'
+    fig.savefig(chart_file, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print(f'  Saved: {chart_file}')
+    
+    # Display in notebook
+    if display_chart:
+        display(Image(chart_file))
+        print(f'\n{dataset.title()} decile summary:')
+        cols_to_show = ['decile', 'n_records', exposure_col, 'incurred_act', 'incurred_pred',
+                        'act_ee_weigh_avg', 'act_simple_avg', 'pred_ee_weigh_avg', 'pred_simple_avg']
+        print(table[cols_to_show].to_string(index=False))
+    
+    # Save table
+    table.to_csv(f"{output_base}/results/{stage}_lift_{dataset}{suffix}_table.csv", index=False)
+    
+    return table

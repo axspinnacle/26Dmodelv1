@@ -24,11 +24,10 @@ def prepare_model_data(
     
     Args:
         output_base: Output directory path
-        target_col: Target column name (e.g., "pp_bi")
-        exposure_col: Exposure column name (e.g., "ee_bi_imps")
+        target_col: Target column name (e.g., "pp_bi" or "pp_bi+pp_pd" for combined)
+        exposure_col: Exposure column name (e.g., "ee_bi_imps" or "ee_bi_imps+ee_pd_imps" for combined)
         target_method: "residual" or "direct"
         loss_cap: Loss cap value (None to skip)
-        loss_type: "bi", "pd", or "bi+pd"
         exposure_floor: Minimum exposure value (e.g., 0.0833)
         verbose: Print progress
         
@@ -173,11 +172,8 @@ def _prepare_model_data_part3(
             train_df=train_orig,
             test_df=test_orig,
             loss_cap=loss_cap,
-            loss_type=loss_type,
-            pp_bi_col=target_col,
-            pp_pd_col="pp_pd",
-            ee_bi_col=exposure_col,
-            ee_pd_col="ee_pd_imps",
+            target_col=target_col,
+            exposure_col=exposure_col,
             exposure_floor=exposure_floor,
             verbose=verbose
         )

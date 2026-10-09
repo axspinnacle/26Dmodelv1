@@ -1,0 +1,18 @@
+config_path: config/car_comp/v1
+duration_seconds: 1094.713941
+end_time: '2026-10-09T09:21:01.620462'
+experiment: car_comp_v1
+results:
+  stage_01: success
+  stage_02: success
+  stage_03: success
+  stage_04a: success
+  stage_04b: success
+  stage_04c: success
+  stage_05a: success
+  stage_05b: skipped
+  stage_05c: success
+  stage_06: success
+  stage_07: success
+  stage_08: success
+start_time: '2026-10-09T09:02:46.906521'

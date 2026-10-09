@@ -7,6 +7,8 @@ experiment:
   target: "pp_coll"
   exposure: "ee_coll_imps"
   coverage: "coll"
+  loss_cap: null  # No capping for collision
+  loss_type: coll
   vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
 
 # Run mode configuration
@@ -121,13 +123,13 @@ xgboost:
 # Execution control
 execution:
   stages:
-    stage_01: false   # Data assembly
-    stage_02: false   # Data conditioning  
-    stage_03: false   # Verification
-    stage_04a: false  # PCA feature engineering
-    stage_04b: false   # Train/test split by fold
-    stage_04c: false   # Feature encoding + model prep
-    stage_05a: false   # Initial model fit (validation)
+    stage_01: true   # Data assembly
+    stage_02: true   # Data conditioning  
+    stage_03: true   # Verification
+    stage_04a: true  # PCA feature engineering
+    stage_04b: true   # Train/test split by fold
+    stage_04c: true   # Feature encoding + model prep
+    stage_05a: true   # Initial model fit (validation)
     stage_05b: false   # Hyperparameter optimization
     stage_05c: true   # Production model training
     stage_06: true    # SHAP dataframe
@@ -140,7 +142,7 @@ execution:
 
 # Hyperparameter Optimization Configuration
 hyperparameter_optimization:
-  method: "grid"             # "grid" (default, no extra deps) or "optuna" (optional)
+  method: "optuna"           # "grid" (default, no extra deps) or "optuna" (optional)
   n_trials: 100              # For optuna (if method="optuna")
   timeout_minutes: 60        # Max time for optuna
   param_grid:                # For grid search

@@ -113,17 +113,17 @@ xgboost:
   verbosity: 1
 execution:
   stages:
-    stage_01: true
-    stage_02: true
-    stage_03: true
-    stage_04a: true
-    stage_04b: true
-    stage_04c: true
-    stage_05a: true
+    stage_01: false
+    stage_02: false
+    stage_03: false
+    stage_04a: false
+    stage_04b: false
+    stage_04c: false
+    stage_05a: false
     stage_05b: false
-    stage_05c: true
-    stage_06: true
-    stage_07: true
+    stage_05c: false
+    stage_06: false
+    stage_07: false
     stage_08: true
     stage_09: false
   stop_on_error: true

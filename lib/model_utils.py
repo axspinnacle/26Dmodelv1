@@ -333,53 +333,65 @@ def apply_loss_cap(
     train_df,
     test_df,
     loss_cap,
-    loss_type="bi",
-    pp_bi_col="pp_bi",
-    pp_pd_col="pp_pd",
-    ee_bi_col="ee_bi_imps",
-    ee_pd_col="ee_pd_imps",
+    target_col,
+    exposure_col,
     exposure_floor=None,
     verbose=True
 ):
     """
-    Apply loss cap and filter records based on loss type.
+    Apply loss cap and filter records based on target/exposure columns.
+    Supports combined targets (e.g., pp_bi+pp_pd) and exposures (e.g., ee_bi_imps+ee_pd_imps).
     
     Args:
         train_df: Training dataframe
         test_df: Test dataframe
-        loss_cap: Maximum allowed loss value
-        loss_type: "bi", "pd", or "bi+pd"
-        pp_bi_col: Column name for BI pure premium
-        pp_pd_col: Column name for PD pure premium
-        ee_bi_col: Column name for BI exposure
-        ee_pd_col: Column name for PD exposure
+        loss_cap: Maximum allowed loss value (None to skip)
+        target_col: Target column name (e.g., "pp_bi" or "pp_bi+pp_pd" for combined)
+        exposure_col: Exposure column name (e.g., "ee_bi_imps" or "ee_bi_imps+ee_pd_imps" for combined)
         exposure_floor: Minimum exposure value (e.g., 0.0833 for 1 month)
         verbose: Whether to print summary
         
     Returns:
         Tuple of (train_filtered, test_filtered)
     """
+    import numpy as np
+    
     if loss_cap is None:
-        print("  No loss cap applied")
+        if verbose:
+            print("  No loss cap applied")
         return train_df.copy(), test_df.copy()
     
-    print(f"\n=== Applying Loss Cap: {loss_cap:,} (type: {loss_type}) ===")
+    # Check if combined mode (+ syntax)
+    is_combined = '+' in target_col and '+' in exposure_col
     
-    # 1. Filter records based on loss_type
-    if loss_type == "bi":
-        train_mask = train_df[ee_bi_col] > 0
-        test_mask = test_df[ee_bi_col] > 0
-        print(f"  Filter: Dropping records where {ee_bi_col} = 0")
-    elif loss_type == "pd":
-        train_mask = train_df[ee_pd_col] > 0
-        test_mask = test_df[ee_pd_col] > 0
-        print(f"  Filter: Dropping records where {ee_pd_col} = 0")
-    elif loss_type == "bi+pd":
-        train_mask = (train_df[ee_bi_col] > 0) & (train_df[ee_pd_col] > 0)
-        test_mask = (test_df[ee_bi_col] > 0) & (test_df[ee_pd_col] > 0)
-        print(f"  Filter: Dropping records where {ee_bi_col} = 0 OR {ee_pd_col} = 0")
+    if is_combined:
+        # Parse combined columns
+        pp_cols = [c.strip() for c in target_col.split('+')]
+        ee_cols = [c.strip() for c in exposure_col.split('+')]
+        
+        if len(pp_cols) != 2 or len(ee_cols) != 2:
+            raise ValueError(f"Combined mode requires exactly 2 columns separated by '+'. Got: target='{target_col}', exposure='{exposure_col}'")
+        
+        pp1, pp2 = pp_cols
+        ee1, ee2 = ee_cols
+        
+        if verbose:
+            print(f"\n=== Applying Loss Cap: {loss_cap:,} (combined: {pp1}+{pp2}) ===")
+        
+        # 1. Filter: Keep records with at least one exposure > 0
+        train_ee_combined = np.maximum(train_df[ee1], train_df[ee2])
+        test_ee_combined = np.maximum(test_df[ee1], test_df[ee2])
+        
+        train_mask = train_ee_combined > 0
+        test_mask = test_ee_combined > 0
     else:
-        raise ValueError(f"Invalid loss_type: {loss_type}. Must be 'bi', 'pd', or 'bi+pd'")
+        # Single column mode
+        if verbose:
+            print(f"\n=== Applying Loss Cap: {loss_cap:,} (target: {target_col}) ===")
+        
+        # 1. Filter: Keep records with exposure > 0
+        train_mask = train_df[exposure_col] > 0
+        test_mask = test_df[exposure_col] > 0
     
     train_filtered = train_df[train_mask].copy()
     test_filtered = test_df[test_mask].copy()
@@ -389,77 +401,85 @@ def apply_loss_cap(
     
     # 2. Apply exposure floor (prevents extreme PP from tiny exposures)
     if exposure_floor:
-        import numpy as np
-        n_floor_train_bi = (train_filtered[ee_bi_col] < exposure_floor).sum() if ee_bi_col in train_filtered.columns else 0
-        n_floor_test_bi = (test_filtered[ee_bi_col] < exposure_floor).sum() if ee_bi_col in test_filtered.columns else 0
-        
-        if ee_bi_col in train_filtered.columns:
-            train_filtered[ee_bi_col] = np.maximum(train_filtered[ee_bi_col], exposure_floor)
-        if ee_bi_col in test_filtered.columns:
-            test_filtered[ee_bi_col] = np.maximum(test_filtered[ee_bi_col], exposure_floor)
-        
-        if loss_type in ["bi+pd", "pd"]:
-            n_floor_train_pd = (train_filtered[ee_pd_col] < exposure_floor).sum() if ee_pd_col in train_filtered.columns else 0
-            n_floor_test_pd = (test_filtered[ee_pd_col] < exposure_floor).sum() if ee_pd_col in test_filtered.columns else 0
+        if is_combined:
+            # Apply floor to both exposure columns
+            n_floor_train_1 = (train_filtered[ee1] < exposure_floor).sum()
+            n_floor_test_1 = (test_filtered[ee1] < exposure_floor).sum()
+            n_floor_train_2 = (train_filtered[ee2] < exposure_floor).sum()
+            n_floor_test_2 = (test_filtered[ee2] < exposure_floor).sum()
             
-            if ee_pd_col in train_filtered.columns:
-                train_filtered[ee_pd_col] = np.maximum(train_filtered[ee_pd_col], exposure_floor)
-            if ee_pd_col in test_filtered.columns:
-                test_filtered[ee_pd_col] = np.maximum(test_filtered[ee_pd_col], exposure_floor)
-        
-        if verbose and (n_floor_train_bi + n_floor_test_bi > 0):
-            print(f"  Exposure floor ({exposure_floor}):")
-            print(f"    {ee_bi_col} - Train: {n_floor_train_bi:,}, Test: {n_floor_test_bi:,}")
-            if loss_type in ["bi+pd", "pd"]:
-                print(f"    {ee_pd_col} - Train: {n_floor_train_pd:,}, Test: {n_floor_test_pd:,}")
+            train_filtered[ee1] = np.maximum(train_filtered[ee1], exposure_floor)
+            test_filtered[ee1] = np.maximum(test_filtered[ee1], exposure_floor)
+            train_filtered[ee2] = np.maximum(train_filtered[ee2], exposure_floor)
+            test_filtered[ee2] = np.maximum(test_filtered[ee2], exposure_floor)
+            
+            if verbose and (n_floor_train_1 + n_floor_test_1 + n_floor_train_2 + n_floor_test_2 > 0):
+                print(f"  Exposure floor ({exposure_floor}):")
+                print(f"    {ee1} - Train: {n_floor_train_1:,}, Test: {n_floor_test_1:,}")
+                print(f"    {ee2} - Train: {n_floor_train_2:,}, Test: {n_floor_test_2:,}")
+        else:
+            # Apply floor to single exposure column
+            n_floor_train = (train_filtered[exposure_col] < exposure_floor).sum()
+            n_floor_test = (test_filtered[exposure_col] < exposure_floor).sum()
+            
+            train_filtered[exposure_col] = np.maximum(train_filtered[exposure_col], exposure_floor)
+            test_filtered[exposure_col] = np.maximum(test_filtered[exposure_col], exposure_floor)
+            
+            if verbose and (n_floor_train + n_floor_test > 0):
+                print(f"  Exposure floor ({exposure_floor}):")
+                print(f"    {exposure_col} - Train: {n_floor_train:,}, Test: {n_floor_test:,}")
     
     # 3. Calculate loss
-    if loss_type == "bi":
-        loss_train = train_filtered[pp_bi_col] * train_filtered[ee_bi_col]
-        loss_test = test_filtered[pp_bi_col] * test_filtered[ee_bi_col]
-    elif loss_type == "pd":
-        loss_train = train_filtered[pp_pd_col] * train_filtered[ee_pd_col]
-        loss_test = test_filtered[pp_pd_col] * test_filtered[ee_pd_col]
-    elif loss_type == "bi+pd":
-        loss_bi_train = train_filtered[pp_bi_col] * train_filtered[ee_bi_col]
-        loss_pd_train = train_filtered[pp_pd_col] * train_filtered[ee_pd_col]
-        loss_train = loss_bi_train + loss_pd_train
+    if is_combined:
+        # Combined: sum PP values, use their respective exposures for loss calculation
+        pp_train = train_filtered[pp1] + train_filtered[pp2]
+        pp_test = test_filtered[pp1] + test_filtered[pp2]
         
-        loss_bi_test = test_filtered[pp_bi_col] * test_filtered[ee_bi_col]
-        loss_pd_test = test_filtered[pp_pd_col] * test_filtered[ee_pd_col]
-        loss_test = loss_bi_test + loss_pd_test
+        # Use max exposure for the combined PP (critical for bi+pd where exposures differ)
+        ee_train = np.maximum(train_filtered[ee1], train_filtered[ee2])
+        ee_test = np.maximum(test_filtered[ee1], test_filtered[ee2])
+        
+        # Calculate actual combined loss (sum of individual losses)
+        loss_train = train_filtered[pp1] * train_filtered[ee1] + train_filtered[pp2] * train_filtered[ee2]
+        loss_test = test_filtered[pp1] * test_filtered[ee1] + test_filtered[pp2] * test_filtered[ee2]
+    else:
+        # Single: use columns directly
+        pp_train = train_filtered[target_col]
+        pp_test = test_filtered[target_col]
+        ee_train = train_filtered[exposure_col]
+        ee_test = test_filtered[exposure_col]
+        
+        loss_train = pp_train * ee_train
+        loss_test = pp_test * ee_test
     
     # 4. Apply cap
     n_cap_train = (loss_train > loss_cap).sum()
     n_cap_test = (loss_test > loss_cap).sum()
     
-    if loss_type == "bi+pd":
+    if is_combined:
         # Proportional scaling for combined loss
         cap_mask_train = loss_train > loss_cap
         cap_mask_test = loss_test > loss_cap
         
         if cap_mask_train.any():
             ratio_train = loss_cap / loss_train[cap_mask_train]
-            train_filtered.loc[cap_mask_train, pp_bi_col] = train_filtered.loc[cap_mask_train, pp_bi_col] * ratio_train
-            train_filtered.loc[cap_mask_train, pp_pd_col] = train_filtered.loc[cap_mask_train, pp_pd_col] * ratio_train
+            train_filtered.loc[cap_mask_train, pp1] = train_filtered.loc[cap_mask_train, pp1] * ratio_train
+            train_filtered.loc[cap_mask_train, pp2] = train_filtered.loc[cap_mask_train, pp2] * ratio_train
         
         if cap_mask_test.any():
             ratio_test = loss_cap / loss_test[cap_mask_test]
-            test_filtered.loc[cap_mask_test, pp_bi_col] = test_filtered.loc[cap_mask_test, pp_bi_col] * ratio_test
-            test_filtered.loc[cap_mask_test, pp_pd_col] = test_filtered.loc[cap_mask_test, pp_pd_col] * ratio_test
+            test_filtered.loc[cap_mask_test, pp1] = test_filtered.loc[cap_mask_test, pp1] * ratio_test
+            test_filtered.loc[cap_mask_test, pp2] = test_filtered.loc[cap_mask_test, pp2] * ratio_test
     else:
         # Single loss type - direct capping
-        pp_col = pp_bi_col if loss_type == "bi" else pp_pd_col
-        ee_col = ee_bi_col if loss_type == "bi" else ee_pd_col
-        
         cap_mask_train = loss_train > loss_cap
         cap_mask_test = loss_test > loss_cap
         
         if cap_mask_train.any():
-            train_filtered.loc[cap_mask_train, pp_col] = loss_cap / train_filtered.loc[cap_mask_train, ee_col]
+            train_filtered.loc[cap_mask_train, target_col] = loss_cap / train_filtered.loc[cap_mask_train, exposure_col]
         
         if cap_mask_test.any():
-            test_filtered.loc[cap_mask_test, pp_col] = loss_cap / test_filtered.loc[cap_mask_test, ee_col]
+            test_filtered.loc[cap_mask_test, target_col] = loss_cap / test_filtered.loc[cap_mask_test, exposure_col]
     
     if verbose and (n_cap_train + n_cap_test > 0):
         print(f"  Loss capped at {loss_cap:,}:")
@@ -472,99 +492,112 @@ def apply_loss_cap(
 def apply_loss_cap_single(
     df,
     loss_cap,
-    loss_type="bi",
-    pp_bi_col="pp_bi",
-    pp_pd_col="pp_pd",
-    ee_bi_col="ee_bi_imps",
-    ee_pd_col="ee_pd_imps",
+    target_col,
+    exposure_col,
     exposure_floor=None,
     verbose=True
 ):
     """
     Apply loss cap and exposure floor to a single dataframe (for scoring).
     Similar to apply_loss_cap but for one dataset.
+    Supports combined targets (e.g., pp_bi+pp_pd) and exposures (e.g., ee_bi_imps+ee_pd_imps).
     
     Args:
         df: Input dataframe
-        loss_cap: Maximum allowed loss value
-        loss_type: "bi", "pd", or "bi+pd"
-        pp_bi_col: Column name for BI pure premium
-        pp_pd_col: Column name for PD pure premium
-        ee_bi_col: Column name for BI exposure
-        ee_pd_col: Column name for PD exposure
-        exposure_floor: Minimum exposure value (e.g., 0.0833)
+        loss_cap: Maximum allowed loss value (None to skip)
+        target_col: Target column name (e.g., "pp_bi" or "pp_bi+pp_pd" for combined)
+        exposure_col: Exposure column name (e.g., "ee_bi_imps" or "ee_bi_imps+ee_pd_imps" for combined)
+        exposure_floor: Minimum exposure value (e.g., 0.0833 for 1 month)
         verbose: Whether to print summary
         
     Returns:
         Filtered and capped dataframe
     """
+    import numpy as np
+    
     if loss_cap is None and exposure_floor is None:
         if verbose:
             print("  No loss cap or exposure floor applied")
         return df.copy()
     
+    # Check if combined mode (+ syntax)
+    is_combined = '+' in target_col and '+' in exposure_col
+    
     df_filtered = df.copy()
     
-    # 1. Filter records based on loss_type
-    if loss_type == "bi":
-        mask = df_filtered[ee_bi_col] > 0
+    if is_combined:
+        # Parse combined columns
+        pp_cols = [c.strip() for c in target_col.split('+')]
+        ee_cols = [c.strip() for c in exposure_col.split('+')]
+        
+        if len(pp_cols) != 2 or len(ee_cols) != 2:
+            raise ValueError(f"Combined mode requires exactly 2 columns separated by '+'. Got: target='{target_col}', exposure='{exposure_col}'")
+        
+        pp1, pp2 = pp_cols
+        ee1, ee2 = ee_cols
+        
+        # 1. Filter: Keep records with at least one exposure > 0
+        ee_combined = np.maximum(df_filtered[ee1], df_filtered[ee2])
+        mask = ee_combined > 0
         if verbose:
-            print(f"  Filter: Dropping {(~mask).sum():,} records where {ee_bi_col} = 0")
+            print(f"  Filter: Dropping {(~mask).sum():,} records where max({ee1}, {ee2}) = 0")
         df_filtered = df_filtered[mask].copy()
-    elif loss_type == "pd":
-        mask = df_filtered[ee_pd_col] > 0
-        if verbose:
-            print(f"  Filter: Dropping {(~mask).sum():,} records where {ee_pd_col} = 0")
-        df_filtered = df_filtered[mask].copy()
-    elif loss_type == "bi+pd":
-        mask = (df_filtered[ee_bi_col] > 0) & (df_filtered[ee_pd_col] > 0)
-        if verbose:
-            print(f"  Filter: Dropping {(~mask).sum():,} records where exposure = 0")
-        df_filtered = df_filtered[mask].copy()
-    
-    # 2. Apply exposure floor
-    if exposure_floor:
-        import numpy as np
-        n_floor_bi = (df_filtered[ee_bi_col] < exposure_floor).sum() if ee_bi_col in df_filtered.columns else 0
         
-        if ee_bi_col in df_filtered.columns:
-            df_filtered[ee_bi_col] = np.maximum(df_filtered[ee_bi_col], exposure_floor)
+        # 2. Apply exposure floor
+        if exposure_floor:
+            n_floor_1 = (df_filtered[ee1] < exposure_floor).sum()
+            n_floor_2 = (df_filtered[ee2] < exposure_floor).sum()
+            
+            df_filtered[ee1] = np.maximum(df_filtered[ee1], exposure_floor)
+            df_filtered[ee2] = np.maximum(df_filtered[ee2], exposure_floor)
+            
+            if verbose and (n_floor_1 + n_floor_2 > 0):
+                print(f"  Exposure floor ({exposure_floor}):")
+                print(f"    {ee1}: {n_floor_1:,} records, {ee2}: {n_floor_2:,} records")
         
-        if loss_type in ["bi+pd", "pd"]:
-            n_floor_pd = (df_filtered[ee_pd_col] < exposure_floor).sum() if ee_pd_col in df_filtered.columns else 0
-            if ee_pd_col in df_filtered.columns:
-                df_filtered[ee_pd_col] = np.maximum(df_filtered[ee_pd_col], exposure_floor)
-        
-        if verbose and n_floor_bi > 0:
-            print(f"  Exposure floor ({exposure_floor}): {n_floor_bi:,} records adjusted")
-    
-    # 3. Apply loss cap (if provided)
-    if loss_cap:
-        if loss_type == "bi":
-            loss = df_filtered[pp_bi_col] * df_filtered[ee_bi_col]
-        elif loss_type == "pd":
-            loss = df_filtered[pp_pd_col] * df_filtered[ee_pd_col]
-        elif loss_type == "bi+pd":
-            loss = (df_filtered[pp_bi_col] * df_filtered[ee_bi_col] + 
-                   df_filtered[pp_pd_col] * df_filtered[ee_pd_col])
-        
-        n_cap = (loss > loss_cap).sum()
-        
-        if loss_type == "bi+pd":
+        # 3. Apply loss cap (if provided)
+        if loss_cap:
+            # Calculate combined loss (sum of individual losses)
+            loss = df_filtered[pp1] * df_filtered[ee1] + df_filtered[pp2] * df_filtered[ee2]
+            n_cap = (loss > loss_cap).sum()
+            
+            # Proportional scaling for combined loss
             cap_mask = loss > loss_cap
             if cap_mask.any():
                 ratio = loss_cap / loss[cap_mask]
-                df_filtered.loc[cap_mask, pp_bi_col] = df_filtered.loc[cap_mask, pp_bi_col] * ratio
-                df_filtered.loc[cap_mask, pp_pd_col] = df_filtered.loc[cap_mask, pp_pd_col] * ratio
-        else:
-            pp_col = pp_bi_col if loss_type == "bi" else pp_pd_col
-            ee_col = ee_bi_col if loss_type == "bi" else ee_pd_col
+                df_filtered.loc[cap_mask, pp1] = df_filtered.loc[cap_mask, pp1] * ratio
+                df_filtered.loc[cap_mask, pp2] = df_filtered.loc[cap_mask, pp2] * ratio
+            
+            if verbose and n_cap > 0:
+                print(f"  Loss capped at {loss_cap:,}: {n_cap:,} records ({n_cap/len(df_filtered)*100:.4f}%)")
+    
+    else:
+        # Single column mode
+        # 1. Filter: Keep records with exposure > 0
+        mask = df_filtered[exposure_col] > 0
+        if verbose:
+            print(f"  Filter: Dropping {(~mask).sum():,} records where {exposure_col} = 0")
+        df_filtered = df_filtered[mask].copy()
+        
+        # 2. Apply exposure floor
+        if exposure_floor:
+            n_floor = (df_filtered[exposure_col] < exposure_floor).sum()
+            df_filtered[exposure_col] = np.maximum(df_filtered[exposure_col], exposure_floor)
+            
+            if verbose and n_floor > 0:
+                print(f"  Exposure floor ({exposure_floor}): {n_floor:,} records adjusted")
+        
+        # 3. Apply loss cap (if provided)
+        if loss_cap:
+            loss = df_filtered[target_col] * df_filtered[exposure_col]
+            n_cap = (loss > loss_cap).sum()
+            
             cap_mask = loss > loss_cap
             if cap_mask.any():
-                df_filtered.loc[cap_mask, pp_col] = loss_cap / df_filtered.loc[cap_mask, ee_col]
-        
-        if verbose and n_cap > 0:
-            print(f"  Loss capped at {loss_cap:,}: {n_cap:,} records ({n_cap/len(df_filtered)*100:.4f}%)")
+                df_filtered.loc[cap_mask, target_col] = loss_cap / df_filtered.loc[cap_mask, exposure_col]
+            
+            if verbose and n_cap > 0:
+                print(f"  Loss capped at {loss_cap:,}: {n_cap:,} records ({n_cap/len(df_filtered)*100:.4f}%)")
     
     if verbose:
         print(f"  Final: {len(df_filtered):,} records")
