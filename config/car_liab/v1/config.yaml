@@ -121,10 +121,10 @@ execution:
     stage_04c: false
     stage_05a: false
     stage_05b: false
-    stage_05c: false
+    stage_05c: true
     stage_06: false
     stage_07: false
-    stage_08: true
+    stage_08: false
     stage_09: false
   stop_on_error: true
   cleanup_memory: true

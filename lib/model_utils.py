@@ -359,6 +359,7 @@ def apply_loss_cap(
     if loss_cap is None:
         if verbose:
             print("  No loss cap applied")
+        # No capping needed, so don't create _uncapped columns
         return train_df.copy(), test_df.copy()
     
     # Check if combined mode (+ syntax)
@@ -452,7 +453,17 @@ def apply_loss_cap(
         loss_train = pp_train * ee_train
         loss_test = pp_test * ee_test
     
-    # 4. Apply cap
+    # 4. Preserve uncapped values before capping
+    if is_combined:
+        train_filtered[f'{pp1}_uncapped'] = train_filtered[pp1].copy()
+        train_filtered[f'{pp2}_uncapped'] = train_filtered[pp2].copy()
+        test_filtered[f'{pp1}_uncapped'] = test_filtered[pp1].copy()
+        test_filtered[f'{pp2}_uncapped'] = test_filtered[pp2].copy()
+    else:
+        train_filtered[f'{target_col}_uncapped'] = train_filtered[target_col].copy()
+        test_filtered[f'{target_col}_uncapped'] = test_filtered[target_col].copy()
+    
+    # 5. Apply cap
     n_cap_train = (loss_train > loss_cap).sum()
     n_cap_test = (loss_test > loss_cap).sum()
     
