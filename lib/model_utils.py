@@ -922,11 +922,11 @@ def save_debug_output(
             # Try multiple possible column names
             for col in source_col:
                 if col in data_orig.columns:
-                    debug_df[target_col] = data_orig[col]
+                    debug_df[target_col] = data_orig[col].values
                     break
         else:
             if source_col in data_orig.columns:
-                debug_df[target_col] = data_orig[source_col]
+                debug_df[target_col] = data_orig[source_col].values
     
     # Set index if provided
     if index is not None:

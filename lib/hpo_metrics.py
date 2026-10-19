@@ -156,6 +156,42 @@ def calculate_lift_opt_score(
     return float(penalty * base_score)
 
 
+def score_from_config(fit_quality, model_power, scoring_config):
+    """lift_opt_score using scoring config values."""
+    sc = scoring_config or {}
+    return calculate_lift_opt_score(
+        fit_quality, model_power,
+        fit_threshold=sc.get('fit_threshold', 0.70),
+        steepness=sc.get('steepness', 20.0),
+        power_weight=sc.get('power_weight', 0.25),
+        power_norm_cap=sc.get('power_norm_cap', 0.50),
+        penalty_type=sc.get('penalty_type', 'linear')
+    )
+
+
+def evaluate_split(model, X, y, w, glm, target_method, bins=10, iteration_range=None):
+    """Fit quality, model power, MAE in PP space for one dataset."""
+    from sklearn.metrics import mean_absolute_error
+    if iteration_range is None:
+        raw = model.predict(X)
+    else:
+        raw = model.predict(X, iteration_range=iteration_range)
+    raw = np.asarray(raw, dtype=float)
+    y = np.asarray(y, dtype=float)
+    w = np.asarray(w, dtype=float)
+    if target_method == "residual":
+        if glm is None:
+            raise ValueError("glm required for residual method")
+        g = np.asarray(glm, dtype=float)
+        pred, act = raw * g, y * g
+    else:
+        pred, act = raw, y
+    df = pd.DataFrame({'pred': pred, 'act_weighted': act * w, 'pred_weighted': pred * w, 'weight': w})
+    fit_quality, model_power = calculate_model_metrics(df, 'weight', bins=bins)
+    mae = mean_absolute_error(act, pred, sample_weight=w)
+    return {'fit_quality': float(fit_quality), 'model_power': float(model_power), 'mae': float(mae)}
+
+
 def compute_fit_quality(y_true, y_pred, weights):
     """
     Compute fit quality from raw arrays (simpler interface for notebooks).

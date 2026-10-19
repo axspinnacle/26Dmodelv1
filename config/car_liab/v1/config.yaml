@@ -7,7 +7,7 @@ experiment:
   vehicle_type: CAR
   loss_cap: 100000
   loss_type: bi
-  exposure_floor: null
+  exposure_floor: 0.0833
   exposure_columns:
   - ee_bi_imps
   - ee_pd_imps
@@ -105,8 +105,8 @@ xgboost:
   subsample: 1.0
   colsample_bytree: 1.0
   alpha: 10
-  n_estimators: 500
-  early_stopping_rounds: 50
+  n_estimators: 3000
+  early_stopping_rounds: 150
   tree_method: hist
   device: cpu
   random_state: 42
@@ -121,10 +121,11 @@ execution:
     stage_04c: false
     stage_05a: false
     stage_05b: false
-    stage_05c: true
+    stage_05c: false
     stage_06: false
     stage_07: false
     stage_08: false
+    stage_08b: true
     stage_09: false
   stop_on_error: true
   cleanup_memory: true
@@ -134,30 +135,31 @@ hyperparameter_optimization:
   timeout_minutes: 60
   param_grid:
     max_depth:
+    - 2
+    - 3
     - 4
-    - 5
-    - 6
     learning_rate:
-    - 0.01
+    - 0.02
     - 0.05
-    - 0.1
     min_child_weight:
-    - 100
-    - 300
-    - 500
+    - 2000
+    - 5000
+    - 10000
+    - 20000
     subsample:
+    - 0.7
     - 0.8
-    - 1.0
     colsample_bytree:
-    - 0.8
+    - 0.7
     - 1.0
-    n_estimators:
-    - 300
-    - 500
     tweedie_variance_power:
+    - 1.2
     - 1.3
-    - 1.5
-    - 1.7
+    - 1.4
+    reg_lambda:
+    - 1
+    - 10
+    - 50
   scoring:
     bins: 10
     fit_threshold: 0.7

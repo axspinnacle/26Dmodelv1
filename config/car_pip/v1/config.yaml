@@ -135,6 +135,7 @@ execution:
     stage_06: true    # SHAP dataframe
     stage_07: true    # SHAP analysis & plot from df
     stage_08: true    # Scoring (holdout/new data)
+    stage_08b: true    # Gini analysis (train/test/holdout)
     stage_09: false    # State analysis
   
   stop_on_error: true
