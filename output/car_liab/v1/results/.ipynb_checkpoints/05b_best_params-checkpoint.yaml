@@ -1,0 +1,7 @@
+colsample_bytree: 0.8
+learning_rate: 0.1
+max_depth: 4
+min_child_weight: 100
+n_estimators: 300
+subsample: 0.8
+tweedie_variance_power: 1.3
