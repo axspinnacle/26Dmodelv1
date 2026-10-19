@@ -20,6 +20,9 @@ checklist for setting up a new vehicle type + coverage combination.
 | **coll** | `pp_coll` | `ee_coll_imps` |
 | **comp** | `pp_comp` | `ee_comp_imps` |
 | **liab** | `pp_bi` | `ee_bi_imps` |
+| **pip** | `pp_pip` | `ee_pip_imps` |
+
+GLM prediction column (`model.glm_prediction_column`): `pred_pp_coll`, `pred_pp_comp`, `pred_pp_pip`, `pred_pp_liab_1p` / `pred_pp_liab_3p`. Must exist in the GLM control file.
 
 ---
 
@@ -79,7 +82,10 @@ machines:
 ```
 
 **Check these settings:**
-- `run_mode`: Usually `debug2` for initial testing
+- `run_mode`: Usually `debug1`/`debug2` for initial testing → **switch to `prod` for final run**
+- `model.glm_prediction_column`: Match coverage (e.g. `pred_pp_comp`)
+- `machines.PC2.paths.output_path`: Update to this model's folder (server)
+- `loss_cap` / `exposure_floor`: Optional, any coverage (`exposure_floor: 0.0833` = 1 month minimum exposure)
 - `hyperparameter_optimization.param_grid`: Adjust if needed
 - Keep other settings unless you have specific requirements
 
@@ -137,10 +143,10 @@ Open in Jupyter and change **Cell 1**:
 
 ```python
 # OLD:
-config_path = "../config/car_coll/v1/config.yaml"
+config_path = "config/car_coll/v1"
 
 # NEW:
-config_path = "../config/suv_comp/v1/config.yaml"
+config_path = "config/suv_comp/v1"
 ```
 
 **Verify kernel:** Should be `carfax26v1`
@@ -157,6 +163,9 @@ Before running, verify:
 - [ ] Master data file exists and contains target/exposure columns
 - [ ] Aux data file exists
 - [ ] Runner notebook points to correct config path
+- [ ] `glm_prediction_column` exists in GLM control file (run `setup_notebooks/00_data_inventory.ipynb`)
+- [ ] `run_mode` set to `prod` for final run
+- [ ] See `quick_check.md` for the full short list
 
 ### 9. Test Run
 
@@ -190,7 +199,16 @@ Run  notebook runners/run_suv_comp_v1.ipynb
 
 ### Mistake 5: Wrong output path
 **Symptom:** Files saved to wrong location  
-**Fix:** Update `machines.PC3.paths.output_path` to match folder structure
+**Fix:** Update `machines.PC3.paths.output_path` (and PC2) to match folder structure
+
+### Mistake 6: Missing GLM prediction column
+**Symptom:** Fails loading base_margin / `pred_pp_*` not found  
+**Fix:** Confirm column exists in control file via `00_data_inventory.ipynb`
+
+### Mistake 7: 05c can't find `05b_best_params.yaml` on prod
+**Symptom:** `FileNotFoundError: Best params not found. Run stage 05b first.`  
+**Cause:** 05b skipped or failed on PC2 (05b writes this file to `{output_path}/results/`)  
+**Fix:** Keep `execution.stages.stage_05b: true` so 05b runs before 05c
 
 ---
 
@@ -200,15 +218,16 @@ Run  notebook runners/run_suv_comp_v1.ipynb
 config/{vehicle}_{coverage}/v1/
 ├── config.yaml                              # ← Main config, update experiment/data sections
 ├── columns_to_load_during_dataassembly.csv  # ← Update pp_* and ee_* columns
-├── columns_inclusion.csv                    # ← Usually same across models
-├── exclusion.csv                            # ← Copy from config/templates/{coverage}/
-├── monotonicity.csv                         # ← Copy from config/templates/{coverage}/
+├── columns_inclusion.csv                    # ← Not used by pipeline stages
+├── exclusion.csv                            # ← Not used by pipeline stages
+├── monotonicity.csv                         # ← Check vehicle-type column (used by 04c)
 ├── pca_features.csv                         # ← Usually same across models
-├── manual_feature_encoding.csv              # ← Usually same across models
+├── manual_feature_encoding.csv              # ← Not used by pipeline stages (EDA only)
 ├── type_conversions.csv                     # ← Usually same across models
-├── all_columns_master.csv                   # ← Usually same across models
-├── all_columns_aux.csv                      # ← Usually same across models
-└── config_generated/                        # ← Auto-generated during pipeline run
+├── all_columns_master.csv                   # ← Not used by pipeline stages (EDA only)
+├── all_columns_aux.csv                      # ← Not used by pipeline stages
+└── config_generated/
+    └── master_feature_encoding.csv          # ← Review encodings (used by 04c)
 
 runners/
 └── run_{vehicle}_{coverage}_v1.ipynb        # ← Update config_path in Cell 1
@@ -228,7 +247,10 @@ config/templates/
 ├── comp/
 │   ├── exclusion.csv
 │   └── monotonicity.csv
-└── liab/
+├── liab/
+│   ├── exclusion.csv
+│   └── monotonicity.csv
+└── pip/
     ├── exclusion.csv
     └── monotonicity.csv
 ```
@@ -264,7 +286,7 @@ cp config/templates/liab/monotonicity.csv config/truck_liab/v1/
 
 # 6. Create runner
 cp runners/run_car_coll_v1.ipynb runners/run_truck_liab_v1.ipynb
-# Edit Cell 1: config_path = "../config/truck_liab/v1/config.yaml"
+# Edit Cell 1: config_path = "config/truck_liab/v1"
 
 # 7. Test
 jupyter notebook runners/run_truck_liab_v1.ipynb
