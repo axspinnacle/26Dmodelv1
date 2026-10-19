@@ -1,6 +1,6 @@
 config_path: config/car_liab/v1
-duration_seconds: 109.445093
-end_time: '2026-10-12T10:24:57.490385'
+duration_seconds: 11.869511
+end_time: '2026-10-19T09:06:45.028030'
 experiment: car_liab3p_v1
 results:
   stage_01: skipped
@@ -11,9 +11,10 @@ results:
   stage_04c: skipped
   stage_05a: skipped
   stage_05b: skipped
-  stage_05c: success
+  stage_05c: skipped
   stage_06: skipped
   stage_07: skipped
   stage_08: skipped
+  stage_08b: success
   stage_09: skipped
-start_time: '2026-10-12T10:23:08.045292'
+start_time: '2026-10-19T09:06:33.158519'

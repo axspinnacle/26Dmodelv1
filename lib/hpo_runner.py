@@ -8,8 +8,75 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from itertools import product
-from sklearn.metrics import mean_absolute_error
-from hpo_metrics import calculate_model_metrics, calculate_lift_opt_score
+from hpo_metrics import evaluate_split, score_from_config
+
+
+def build_trial_params(param_dict, base_xgb_params, monotone_constraints):
+    """Merge trial params into base params."""
+    full_params = base_xgb_params.copy()
+    full_params.update(param_dict)
+    if "tweedie_variance_power" in param_dict and "tweedie" in str(full_params.get("eval_metric", "")):
+        full_params["eval_metric"] = f"tweedie-nloglik@{param_dict['tweedie_variance_power']}"
+    if monotone_constraints:
+        full_params['monotone_constraints'] = monotone_constraints
+    return full_params
+
+
+def fit_trial_model(full_params, X_train, y_train, w_train, X_test, y_test, w_test):
+    """Train XGBoost with early stopping on test."""
+    model = xgb.XGBRegressor(**full_params)
+    model.fit(
+        X_train, y_train,
+        sample_weight=w_train,
+        eval_set=[(X_test, y_test)],
+        sample_weight_eval_set=[w_test],
+        verbose=0
+    )
+    return model
+
+
+def get_best_iteration(model):
+    """Trees used (best_iteration + 1), or n_estimators without early stopping."""
+    try:
+        return int(model.best_iteration) + 1
+    except (AttributeError, ValueError, TypeError):
+        return int(model.get_params().get('n_estimators') or 100)
+
+
+def run_single_trial(
+    param_dict, base_xgb_params, monotone_constraints,
+    X_train, y_train, w_train, X_test, y_test, w_test,
+    glm_pred_train, glm_pred_test, target_method, scoring_config
+):
+    """Train one trial; return params + train/test metrics."""
+    bins = (scoring_config or {}).get('bins', 10)
+    full_params = build_trial_params(param_dict, base_xgb_params, monotone_constraints)
+    model = fit_trial_model(full_params, X_train, y_train, w_train, X_test, y_test, w_test)
+    n_trees = get_best_iteration(model)
+    rng = (0, n_trees)
+
+    te = evaluate_split(model, X_test, y_test, w_test, glm_pred_test, target_method, bins, rng)
+    if target_method == "residual" and glm_pred_train is None:
+        tr = {'fit_quality': np.nan, 'model_power': np.nan, 'mae': np.nan}
+    else:
+        tr = evaluate_split(model, X_train, y_train, w_train, glm_pred_train, target_method, bins, rng)
+
+    score = score_from_config(te['fit_quality'], te['model_power'], scoring_config)
+    row = dict(param_dict)
+    row.update({
+        'fit_quality': te['fit_quality'],
+        'model_power': te['model_power'],
+        'lift_opt_score': score,
+        'mae': te['mae'],
+        'train_fit': tr['fit_quality'],
+        'train_power': tr['model_power'],
+        'test_fit': te['fit_quality'],
+        'test_power': te['model_power'],
+        'fit_gap': tr['fit_quality'] - te['fit_quality'],
+        'power_gap': tr['model_power'] - te['model_power'],
+        'best_iteration': n_trees
+    })
+    return row
 
 
 def run_grid_search(
@@ -19,144 +86,62 @@ def run_grid_search(
     monotone_constraints, exposure_col,
     scoring_config,
     glm_pred_test=None,
-    target_method="direct"
+    target_method="direct",
+    glm_pred_train=None
 ):
     """
     Run grid search over hyperparameters using actuarial lift metrics.
-    
-    Args:
-        glm_pred_test: GLM predictions for test set (needed for residual method)
-        target_method: "residual" or "direct" - determines if inverse transform needed
-    
+
     Returns dict with: best_params, best_metrics, best_score, results_df
     """
-    from model_utils import inverse_transform
-    bins = scoring_config.get('bins', 10)
-    fit_threshold = scoring_config.get('fit_threshold', 0.70)
-    steepness = scoring_config.get('steepness', 20.0)
-    power_weight = scoring_config.get('power_weight', 0.25)
-    power_norm_cap = scoring_config.get('power_norm_cap', 0.50)
-    penalty_type = scoring_config.get('penalty_type', 'linear')
-    
-    best_score = -float('inf')
-    best_params = None
-    best_metrics = None
-    best_iteration = 0
-    results = []
-    
-    total_combinations = np.prod([len(v) for v in param_grid.values()])
-    print(f"  Grid size: {total_combinations} combinations")
-    print(f"  penalty_type: {penalty_type}")
+    total = int(np.prod([len(v) for v in param_grid.values()]))
+    print(f"  Grid size: {total} combinations")
+    print(f"  penalty_type: {(scoring_config or {}).get('penalty_type', 'linear')}")
+    print(f"  n_estimators cap: {base_xgb_params.get('n_estimators')}, early_stopping_rounds: {base_xgb_params.get('early_stopping_rounds')}")
     print(f"  param_grid:")
     for k, v in param_grid.items():
         print(f"    {k}: {v}")
-    
-    # Grid search
+
+    results = []
+    best_score, best_idx = -float('inf'), 0
     for i, params in enumerate(product(*param_grid.values())):
         param_dict = dict(zip(param_grid.keys(), params))
-        
-        # Merge with base params
-        full_params = base_xgb_params.copy()
-        full_params.update(param_dict)
-        
-        # Fix eval_metric for tweedie if variance_power changed
-        if "tweedie_variance_power" in param_dict and "eval_metric" in full_params:
-            if "tweedie" in full_params["eval_metric"]:
-                vp = param_dict["tweedie_variance_power"]
-                full_params["eval_metric"] = f"tweedie-nloglik@{vp}"
-        
-        # Add monotonicity constraints
-        if monotone_constraints:
-            full_params['monotone_constraints'] = monotone_constraints
-        
-        # Train model
-        model = xgb.XGBRegressor(**full_params)
-        model.fit(
-            X_train, y_train,
-            sample_weight=w_train,
-            eval_set=[(X_test, y_test)],
-            sample_weight_eval_set=[w_test],
-            verbose=0
+        row = run_single_trial(
+            param_dict, base_xgb_params, monotone_constraints,
+            X_train, y_train, w_train, X_test, y_test, w_test,
+            glm_pred_train, glm_pred_test, target_method, scoring_config
         )
-        
-        # Predict (raw GBM output)
-        pred_test_raw = model.predict(X_test)
-        
-        # Apply inverse transform if using residual method
-        # Maintain index alignment: X_test has vin_date index, use it for all Series
-        if target_method == "residual":
-            if glm_pred_test is None:
-                raise ValueError("glm_pred_test required for residual method")
-            # Create Series with proper index from X_test (which has vin_date from test_orig)
-            pred_test_series = pd.Series(pred_test_raw, index=X_test.index)
-            y_test_series = pd.Series(y_test, index=X_test.index)
-            
-            # inverse_transform preserves Series type and index
-            pred_test_pp = inverse_transform(pred_test_series, glm_pred_test, target_method)
-            y_test_pp = inverse_transform(y_test_series, glm_pred_test, target_method)
-        else:
-            pred_test_pp = pd.Series(pred_test_raw, index=X_test.index)
-            y_test_pp = pd.Series(y_test, index=X_test.index)
-        
-        # Prepare data for metrics (using PP space)
-        # All Series now have matching vin_date index - no alignment errors
-        test_eval = pd.DataFrame({
-            'pred': pred_test_pp,
-            'act_weighted': y_test_pp * w_test,
-            'pred_weighted': pred_test_pp * w_test,
-            exposure_col: w_test
-        })
-        
-        # Calculate actuarial metrics
-        fit_quality, model_power = calculate_model_metrics(test_eval, exposure_col, bins=bins)
-        score = calculate_lift_opt_score(
-            fit_quality, model_power,
-            fit_threshold=fit_threshold,
-            steepness=steepness,
-            power_weight=power_weight,
-            power_norm_cap=power_norm_cap,
-            penalty_type=penalty_type
-        )
-        
-        # Calculate MAE for reference (in PP space)
-        mae = mean_absolute_error(y_test_pp, pred_test_pp, sample_weight=w_test)
-        
-        # Store results
-        result_row = {k: v for k, v in param_dict.items() if k in param_grid or k == 'n_estimators'}
-        result_row.update({
-            'fit_quality': fit_quality,
-            'model_power': model_power,
-            'lift_opt_score': score,
-            'mae': mae
-        })
-        results.append(result_row)
-        
-        # Track best
-        is_new_best = score > best_score
-        if is_new_best:
-            best_score = score
-            best_iteration = i + 1
-            best_params = {k: v for k, v in param_dict.items() if k in param_grid or k == "n_estimators"}
-            best_metrics = {
-                'fit_quality': fit_quality,
-                'model_power': model_power,
-                'lift_opt_score': score,
-                'mae': mae
-            }
-            print(f"  [{i+1}/{total_combinations}] ★ NEW BEST: score={score:.4f} (fit={fit_quality:.4f}, power={model_power:.4f})")
+        row['trial_number'] = i + 1
+        results.append(row)
+        if row['lift_opt_score'] > best_score:
+            best_score, best_idx = row['lift_opt_score'], i
+            print(f"  [{i+1}/{total}] ★ NEW BEST: score={best_score:.4f} (test_fit={row['test_fit']:.4f}, train_fit={row['train_fit']:.4f}, power={row['test_power']:.4f}, trees={row['best_iteration']})")
         elif (i + 1) % 10 == 0:
-            # Progress update every 10 iterations
-            print(f"  [{i+1}/{total_combinations}] score={score:.4f} | best so far={best_score:.4f} ({best_iteration}/{total_combinations}, fit={best_metrics['fit_quality']:.2f}, power={best_metrics['model_power']:.2f})")
-    
+            print(f"  [{i+1}/{total}] score={row['lift_opt_score']:.4f} | best so far={best_score:.4f} ({best_idx+1}/{total})")
+
     print(f"\n* Grid search complete")
     print(f"  Best score: {best_score:.4f}")
-    
-    results_df = pd.DataFrame(results).sort_values('lift_opt_score', ascending=False)
-    
+    return package_results(results, list(param_grid.keys()))
+
+
+def _py(v):
+    """numpy scalar -> python (for yaml)."""
+    return v.item() if hasattr(v, 'item') else v
+
+
+def package_results(results, param_names):
+    """Build results_df (sorted by score), best_params, best_metrics."""
+    results_df = pd.DataFrame(results).sort_values('lift_opt_score', ascending=False).reset_index(drop=True)
+    best = results_df.iloc[0]
+    best_row = max(results, key=lambda r: r['lift_opt_score'])
+    best_params = {k: _py(best_row[k]) for k in param_names}
+    metric_cols = ['fit_quality', 'model_power', 'lift_opt_score', 'mae', 'train_fit', 'train_power',
+                   'test_fit', 'test_power', 'fit_gap', 'best_iteration', 'trial_number']
+    best_metrics = {k: _py(best[k]) for k in metric_cols if k in best.index}
     return {
         'best_params': best_params,
         'best_metrics': best_metrics,
-        'best_score': best_score,
+        'best_score': float(best['lift_opt_score']),
         'results_df': results_df
     }
 
@@ -167,27 +152,25 @@ def save_hpo_results(output_base, best_params, best_metrics, results_df):
     """
     import yaml
     import os
-    
+
     results_dir = f'{output_base}/results'
     os.makedirs(results_dir, exist_ok=True)
-    
+
     print(f'\n* Saving results...')
-    
-    # Save best params as YAML
+
     best_params_file = f'{results_dir}/05b_best_params.yaml'
     with open(best_params_file, 'w') as f:
-        yaml.dump(best_params, f, default_flow_style=False, sort_keys=True)
+        yaml.dump({k: _py(v) for k, v in best_params.items()}, f, default_flow_style=False, sort_keys=True)
     print(f'  Best params: {best_params_file}')
-    
-    # Save best metrics
+
     metrics_file = f'{results_dir}/05b_metrics.yaml'
     with open(metrics_file, 'w') as f:
-        yaml.dump(best_metrics, f, default_flow_style=False)
+        yaml.dump({k: _py(v) for k, v in best_metrics.items()}, f, default_flow_style=False)
     print(f'  Metrics: {metrics_file}')
-    
-    # Save all trial results
+
     results_file = f'{results_dir}/05b_hpo_results.csv'
     results_df.to_csv(results_file, index=False)
     print(f'  All results: {results_file}')
-    
+
     print(f'\n[OK] HPO results saved')
+
