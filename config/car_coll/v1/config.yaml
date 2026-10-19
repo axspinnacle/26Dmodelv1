@@ -1,9 +1,9 @@
 # CAR COLLISION MODEL - Version 1
-# Configuration for pp_bi target (bodily injury pure premium)
+# Configuration for pp_coll target (coll pure premium)
 
 experiment:
   name: "car_coll_v1"
-  description: "Car body injury model - baseline"
+  description: "Car Collision model - baseline"
   target: "pp_coll"
   exposure: "ee_coll_imps"
   coverage: "coll"
@@ -12,7 +12,7 @@ experiment:
   vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
 
 # Run mode configuration
-run_mode: "debug2"  # "debug1", "debug2", or "prod"
+run_mode: "prod"  # "debug1", "debug2", or "prod"
 
 debug1:
   train_folds: [1]
@@ -48,7 +48,7 @@ machines:
     paths:
       master_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
       aux_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
-      output_path: "/home/carfax_shared/data/2026_Dmodel_data"  # TODO: Change to output folder after testing
+      output_path: "/home/carfax_shared/dmodel_carfax/exploration/Dmodel_output_data/car_coll/v1"  # TODO: Change to output folder after testing
   PC3:
     # Mac - Machine Learning Development local development under user aps
     conda_env: "py311_26v1"
@@ -75,7 +75,7 @@ data:
   fold_column: "fold"   # Column in AUX file only
   join_type: "inner"    # Inner join to keep only matched records
   columns_to_load_file: "columns_to_load_during_dataassembly.csv"  # Subset of columns to load (performance)
-  control_model_file: "aux_dataset_car_vindate_ctl_no_duplicate.parquet"  # GLM predictions for base_margin
+  control_model_file: "aux_dataset_car_vindate_ctl.parquet"  # GLM predictions for base_margin
   
 # Feature configuration
 # Features loaded from CSV file with category/range metadata
@@ -130,7 +130,7 @@ execution:
     stage_04b: true   # Train/test split by fold
     stage_04c: true   # Feature encoding + model prep
     stage_05a: true   # Initial model fit (validation)
-    stage_05b: false   # Hyperparameter optimization
+    stage_05b: true   # Hyperparameter optimization
     stage_05c: true   # Production model training
     stage_06: true    # SHAP dataframe
     stage_07: true    # SHAP analysis & plot from df
