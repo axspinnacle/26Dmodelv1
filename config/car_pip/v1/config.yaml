@@ -13,7 +13,7 @@ experiment:
   vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
 
 # Run mode configuration
-run_mode: "debug2"  # "debug1", "debug2", or "prod"
+run_mode: "prod"  # "debug1", "debug2", or "prod"
 
 debug1:
   train_folds: [1]
@@ -131,7 +131,7 @@ execution:
     stage_04b: true   # Train/test split by fold
     stage_04c: true   # Feature encoding + model prep
     stage_05a: true   # Initial model fit (validation)
-    stage_05b: false   # Hyperparameter optimization
+    stage_05b: true   # Hyperparameter optimization
     stage_05c: true   # Production model training
     stage_06: true    # SHAP dataframe
     stage_07: true    # SHAP analysis & plot from df
