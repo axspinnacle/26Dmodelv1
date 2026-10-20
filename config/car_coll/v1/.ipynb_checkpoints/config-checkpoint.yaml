@@ -1,16 +1,19 @@
 # CAR COLLISION MODEL - Version 1
-# Configuration for pp_bi target (bodily injury pure premium)
+# Configuration for pp_coll target (coll pure premium)
 
 experiment:
   name: "car_coll_v1"
-  description: "Car body injury model - baseline"
+  description: "Car Collision model - baseline"
   target: "pp_coll"
   exposure: "ee_coll_imps"
   coverage: "coll"
+  loss_cap: null  # No capping for collision
+  loss_type: coll
+  exposure_floor: 0.0833  # min exposure (1 month); applied with or without loss_cap
   vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
 
 # Run mode configuration
-run_mode: "debug2"  # "debug1", "debug2", or "prod"
+run_mode: "prod"  # "debug1", "debug2", or "prod"
 
 debug1:
   train_folds: [1]
@@ -28,7 +31,6 @@ prod:
   train_folds: [1, 2, 3, 4, 5]
   test_folds: [6,7]
   holdout_folds: [8, 9, 10]
-  hpo_trials: 20
 
 # Machine-specific configuration (selected automatically based on current.pc file)
 # The current.pc file contains a number (1-4) that determines which machine config to use
@@ -46,13 +48,13 @@ machines:
     paths:
       master_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
       aux_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
-      output_path: "/home/carfax_shared/data/2026_Dmodel_data"  # TODO: Change to output folder after testing
+      output_path: "/home/carfax_shared/dmodel_carfax/exploration/Dmodel_output_data/car_coll/v1"  # TODO: Change to output folder after testing
   PC3:
     # Mac - Machine Learning Development local development under user aps
     conda_env: "py311_26v1"
     paths:
-      master_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
-      aux_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
+      master_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data/alldata/car"
+      aux_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data/alldata/car"
       output_path: "output/car_coll/v1"  # Relative to project root
   PC4:
     # Not configured - add your paths here when setting up PC4
@@ -73,7 +75,7 @@ data:
   fold_column: "fold"   # Column in AUX file only
   join_type: "inner"    # Inner join to keep only matched records
   columns_to_load_file: "columns_to_load_during_dataassembly.csv"  # Subset of columns to load (performance)
-  control_model_file: "aux_dataset_car_vindate_ctl_no_duplicate.parquet"  # GLM predictions for base_margin
+  control_model_file: "aux_dataset_car_vindate_ctl.parquet"  # GLM predictions for base_margin
   
 # Feature configuration
 # Features loaded from CSV file with category/range metadata
@@ -111,8 +113,8 @@ xgboost:
   subsample: 1.0
   colsample_bytree: 1.0
   alpha: 10
-  n_estimators: 500
-  early_stopping_rounds: 50  # Stop if no improvement for 50 iterations
+  n_estimators: 3000
+  early_stopping_rounds: 150  # Stop if no improvement for 150 iterations
   tree_method: "hist"
   device: "cpu"
   random_state: 42
@@ -121,18 +123,19 @@ xgboost:
 # Execution control
 execution:
   stages:
-    stage_01: false   # Data assembly
-    stage_02: false   # Data conditioning  
-    stage_03: false   # Verification
-    stage_04a: false  # PCA feature engineering
-    stage_04b: false   # Train/test split by fold
-    stage_04c: false   # Feature encoding + model prep
-    stage_05a: false   # Initial model fit (validation)
+    stage_01: true   # Data assembly
+    stage_02: true   # Data conditioning  
+    stage_03: true   # Verification
+    stage_04a: true  # PCA feature engineering
+    stage_04b: true   # Train/test split by fold
+    stage_04c: true   # Feature encoding + model prep
+    stage_05a: true   # Initial model fit (validation)
     stage_05b: false   # Hyperparameter optimization
     stage_05c: true   # Production model training
     stage_06: true    # SHAP dataframe
     stage_07: true    # SHAP analysis & plot from df
     stage_08: true    # Scoring (holdout/new data)
+    stage_08b: true    # Gini analysis (train/test/holdout)
     stage_09: false    # State analysis
   
   stop_on_error: true
@@ -140,20 +143,22 @@ execution:
 
 # Hyperparameter Optimization Configuration
 hyperparameter_optimization:
-  method: "grid"             # "grid" (default, no extra deps) or "optuna" (optional)
+  method: "optuna"           # "grid" (default, no extra deps) or "optuna" (optional)
   n_trials: 100              # For optuna (if method="optuna")
   timeout_minutes: 60        # Max time for optuna
-  param_grid:                # For grid search
-    max_depth: [3, 4, 5, 6]
-    learning_rate: [0.01, 0.05, 0.1]
-    min_child_weight: [500, 1000, 2000]
-    subsample: [0.8, 1.0]
-    colsample_bytree: [0.8, 1.0]
+  param_grid:                # Search space (same as car_liab)
+    max_depth: [2, 3, 4]
+    learning_rate: [0.02, 0.05]
+    min_child_weight: [2000, 5000, 10000, 20000]
+    subsample: [0.7, 0.8]
+    colsample_bytree: [0.7, 1.0]
+    tweedie_variance_power: [1.2, 1.3, 1.4]
+    reg_lambda: [1, 10, 50]
   scoring:                   # Actuarial lift optimization scoring
     bins: 10                 # Number of deciles for lift calculation
     fit_threshold: 0.70      # Minimum acceptable fit quality (0-1)
     steepness: 20.0          # Sigmoid penalty sharpness below threshold
-    power_weight: 0.25       # Weight of model_power in combined score
+    power_weight: 0.2        # Weight of model_power in combined score
     power_norm_cap: 0.50     # Normalization cap for model_power
 
 # Scoring Configuration (holdout, new data, production)

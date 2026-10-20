@@ -9,13 +9,13 @@ experiment:
   # assumes GLM pred_pp_liab_3p is BI+PD loss per max(ee_bi, ee_pd)
   coverage: liab
   vehicle_type: CAR
-  loss_cap: 100000               # applied to combined BI+PD loss
+  loss_cap: 125000               # applied to combined BI+PD loss
   loss_type: bi+pd               # label only - not read by any code
   exposure_floor: 0.0833
   exposure_columns:
   - ee_bi_imps
   - ee_pd_imps
-run_mode: debug2
+run_mode: prod
 debug1:
   train_folds:
   - 1
@@ -117,13 +117,13 @@ xgboost:
   verbosity: 1
 execution:
   stages:
-    stage_01: true
-    stage_02: true
-    stage_03: true
-    stage_04a: true
-    stage_04b: true
-    stage_04c: true
-    stage_05a: true
+    stage_01: false
+    stage_02: false
+    stage_03: false
+    stage_04a: false
+    stage_04b: false
+    stage_04c: false
+    stage_05a: false
     stage_05b: false
     stage_05c: true
     stage_06: true
