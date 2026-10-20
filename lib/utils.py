@@ -129,6 +129,53 @@ def plot_learning_curve(history_df, output_path, metric='rmse'):
     return output_path
 
 
+def combine_source_columns(cfg):
+    """Source columns needed to build combined target/exposure ([] if no experiment.combine block)."""
+    comb = cfg.get('experiment', {}).get('combine') or {}
+    return list(comb.get('target', [])) + list(comb.get('exposure', []))
+
+
+def add_combined_columns(df, cfg, verbose=True):
+    """
+    Build combined target/exposure columns when config has experiment.combine (e.g. BI+PD).
+    No-op if the block is missing or the source columns are not all present.
+
+    Config example:
+        target: pp_bi_pp_pd
+        exposure: ee_bi_imps_ee_pd_imps
+        combine:
+          target: [pp_bi, pp_pd]
+          exposure: [ee_bi_imps, ee_pd_imps]
+
+    exposure = max(ee_1, ee_2)
+    target   = (pp_1*ee_1 + pp_2*ee_2) / exposure  -> target*exposure = total loss
+    Rows with exposure 0 get target 0.
+    """
+    import numpy as np
+    comb = cfg.get('experiment', {}).get('combine')
+    if not comb:
+        return df
+    pp_cols, ee_cols = list(comb['target']), list(comb['exposure'])
+    if len(pp_cols) != len(ee_cols):
+        raise ValueError(f"experiment.combine: target {pp_cols} and exposure {ee_cols} must have the same length")
+    missing = [c for c in pp_cols + ee_cols if c not in df.columns]
+    if missing:
+        if verbose:
+            print(f"  [combine] Skipped - missing source columns: {missing}")
+        return df
+    target_col, exposure_col = cfg['experiment']['target'], cfg['experiment']['exposure']
+    ee = np.maximum.reduce([df[c].fillna(0).to_numpy(dtype=float) for c in ee_cols])
+    loss = sum(df[p].fillna(0).to_numpy(dtype=float) * df[e].fillna(0).to_numpy(dtype=float)
+               for p, e in zip(pp_cols, ee_cols))
+    pp = np.divide(loss, ee, out=np.zeros_like(loss), where=ee > 0)
+    df[exposure_col] = ee
+    df[target_col] = pp
+    if verbose:
+        print(f"  [combine] {target_col} = sum(pp*ee) / {exposure_col}, {exposure_col} = max({', '.join(ee_cols)})")
+        print(f"  [combine] Rows: {len(df):,}, total loss: {loss.sum():,.0f}, mean {target_col}: {pp.mean():.4f}")
+    return df
+
+
 def validate_critical_columns(df, cfg, stage_name, check_nulls=True):
     """Validate critical columns exist and optionally check for nulls. Usage: validate_critical_columns(df, cfg, 'Stage 01')"""
     critical = [

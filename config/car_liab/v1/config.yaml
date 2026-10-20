@@ -1,12 +1,16 @@
 experiment:
   name: car_liab3p_v1
   description: Car liability model - baseline
-  target: pp_bi
-  exposure: ee_bi_imps
+  target: pp_bi_pp_pd            # built in stage 01/08 from combine.target (see below)
+  exposure: ee_bi_imps_ee_pd_imps  # built in stage 01/08 from combine.exposure
+  combine:                       # optional: exposure = max(ee), target = sum(pp*ee) / exposure
+    target: [pp_bi, pp_pd]
+    exposure: [ee_bi_imps, ee_pd_imps]
+  # assumes GLM pred_pp_liab_3p is BI+PD loss per max(ee_bi, ee_pd)
   coverage: liab
   vehicle_type: CAR
-  loss_cap: 100000
-  loss_type: bi
+  loss_cap: 100000               # applied to combined BI+PD loss
+  loss_type: bi+pd               # label only - not read by any code
   exposure_floor: 0.0833
   exposure_columns:
   - ee_bi_imps
@@ -56,12 +60,12 @@ machines:
     paths:
       master_data_path: /home/carfax_shared/D model data steps/Master Datasets/car
       aux_data_path: /home/carfax_shared/D model data steps/Master Datasets/car
-      output_path: /home/carfax_shared/data/2026_Dmodel_data
+      output_path: /home/carfax_shared/dmodel_carfax/exploration/Dmodel_output_data/car_liab/v1
   PC3:
     conda_env: py311_26v1
     paths:
-      master_data_path: /Users/Mach/dev/aps/data/2026_Dmodel_data
-      aux_data_path: /Users/Mach/dev/aps/data/2026_Dmodel_data
+      master_data_path: /Users/Mach/dev/aps/data/2026_Dmodel_data/alldata/car
+      aux_data_path: /Users/Mach/dev/aps/data/2026_Dmodel_data/alldata/car
       output_path: output/car_liab/v1
   PC4:
     conda_env: py311_26v1
@@ -71,12 +75,12 @@ machines:
       output_path: null
 data:
   master_file: master_dataset_car.parquet
-  aux_file: car_with_dep_factor_fold_dedup.parquet
+  aux_file: car_with_dep_factor_fold.parquet
   join_key: vin_date
   fold_column: fold
   join_type: inner
   columns_to_load_file: columns_to_load_during_dataassembly.csv
-  control_model_file: aux_dataset_car_vindate_ctl_no_duplicate.parquet
+  control_model_file: aux_dataset_car_vindate_ctl.parquet
 features:
   inclusion_file: columns_inclusion.csv
   exclusion_file: exclusion.csv
@@ -113,18 +117,18 @@ xgboost:
   verbosity: 1
 execution:
   stages:
-    stage_01: false
-    stage_02: false
-    stage_03: false
-    stage_04a: false
-    stage_04b: false
-    stage_04c: false
-    stage_05a: false
+    stage_01: true
+    stage_02: true
+    stage_03: true
+    stage_04a: true
+    stage_04b: true
+    stage_04c: true
+    stage_05a: true
     stage_05b: false
-    stage_05c: false
-    stage_06: false
-    stage_07: false
-    stage_08: false
+    stage_05c: true
+    stage_06: true
+    stage_07: true
+    stage_08: true
     stage_08b: true
     stage_09: false
   stop_on_error: true

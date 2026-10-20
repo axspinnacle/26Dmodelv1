@@ -356,7 +356,7 @@ def apply_loss_cap(
     """
     import numpy as np
     
-    if loss_cap is None:
+    if loss_cap is None and not exposure_floor:
         if verbose:
             print("  No loss cap applied")
         # No capping needed, so don't create _uncapped columns
@@ -364,6 +364,24 @@ def apply_loss_cap(
     
     # Check if combined mode (+ syntax)
     is_combined = '+' in target_col and '+' in exposure_col
+    
+    if loss_cap is None:
+        # Exposure floor only: drop zero-exposure rows, floor exposure, no capping
+        if is_combined:
+            raise ValueError("Exposure floor without loss_cap is not supported for '+' combined columns; use experiment.combine")
+        if verbose:
+            print(f"\n=== Applying Exposure Floor: {exposure_floor} (no loss cap) ===")
+        train_filtered = train_df[train_df[exposure_col] > 0].copy()
+        test_filtered = test_df[test_df[exposure_col] > 0].copy()
+        if verbose:
+            print(f"  Records dropped (exposure=0) - Train: {len(train_df)-len(train_filtered):,}, Test: {len(test_df)-len(test_filtered):,}")
+        n_tr = (train_filtered[exposure_col] < exposure_floor).sum()
+        n_te = (test_filtered[exposure_col] < exposure_floor).sum()
+        train_filtered[exposure_col] = np.maximum(train_filtered[exposure_col], exposure_floor)
+        test_filtered[exposure_col] = np.maximum(test_filtered[exposure_col], exposure_floor)
+        if verbose:
+            print(f"  Exposure floor ({exposure_floor}): {exposure_col} - Train: {n_tr:,}, Test: {n_te:,}")
+        return train_filtered, test_filtered
     
     if is_combined:
         # Parse combined columns

@@ -9,6 +9,7 @@ experiment:
   coverage: "pip"
   loss_cap: null  # No capping for PIP
   loss_type: pip
+  exposure_floor: 0.0833  # min exposure (1 month); applied with or without loss_cap
   vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
 
 # Run mode configuration
@@ -48,13 +49,13 @@ machines:
     paths:
       master_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
       aux_data_path: "/home/carfax_shared/D model data steps/Master Datasets/car"
-      output_path: "/home/carfax_shared/data/2026_Dmodel_data"  # TODO: Change to output folder after testing
+      output_path: "/home/carfax_shared/dmodel_carfax/exploration/Dmodel_output_data/car_pip/v1"  # TODO: Change to output folder after testing
   PC3:
     # Mac - Machine Learning Development local development under user aps
     conda_env: "py311_26v1"
     paths:
-      master_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
-      aux_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data"
+      master_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data/alldata/car"
+      aux_data_path: "/Users/Mach/dev/aps/data/2026_Dmodel_data/alldata/car"
       output_path: "output/car_pip/v1"  # Relative to project root
   PC4:
     # Not configured - add your paths here when setting up PC4
@@ -70,12 +71,12 @@ machines:
 # Actual paths are in machines.PCX.paths section above
 data:
   master_file: "master_dataset_car.parquet"
-  aux_file: "car_with_dep_factor_fold_dedup.parquet"  # Deduplicated version (was: car_with_dep_factor_fold.parquet)
+  aux_file: "car_with_dep_factor_fold.parquet"
   join_key: "vin_date"  # Column name for join (vindate or similar)
   fold_column: "fold"   # Column in AUX file only
   join_type: "inner"    # Inner join to keep only matched records
   columns_to_load_file: "columns_to_load_during_dataassembly.csv"  # Subset of columns to load (performance)
-  control_model_file: "aux_dataset_car_vindate_ctl_no_duplicate.parquet"  # GLM predictions for base_margin
+  control_model_file: "aux_dataset_car_vindate_ctl.parquet"  # GLM predictions for base_margin
   
 # Feature configuration
 # Features loaded from CSV file with category/range metadata
@@ -113,8 +114,8 @@ xgboost:
   subsample: 1.0
   colsample_bytree: 1.0
   alpha: 10
-  n_estimators: 500
-  early_stopping_rounds: 50  # Stop if no improvement for 50 iterations
+  n_estimators: 3000
+  early_stopping_rounds: 150  # Stop if no improvement for 150 iterations
   tree_method: "hist"
   device: "cpu"
   random_state: 42
@@ -146,17 +147,19 @@ hyperparameter_optimization:
   method: "optuna"           # "grid" (default, no extra deps) or "optuna" (optional)
   n_trials: 100              # For optuna (if method="optuna")
   timeout_minutes: 60        # Max time for optuna
-  param_grid:                # For grid search
-    max_depth: [3, 4, 5, 6]
-    learning_rate: [0.01, 0.05, 0.1]
-    min_child_weight: [500, 1000, 2000]
-    subsample: [0.8, 1.0]
-    colsample_bytree: [0.8, 1.0]
+  param_grid:                # Search space (same as car_liab)
+    max_depth: [2, 3, 4]
+    learning_rate: [0.02, 0.05]
+    min_child_weight: [2000, 5000, 10000, 20000]
+    subsample: [0.7, 0.8]
+    colsample_bytree: [0.7, 1.0]
+    tweedie_variance_power: [1.2, 1.3, 1.4]
+    reg_lambda: [1, 10, 50]
   scoring:                   # Actuarial lift optimization scoring
     bins: 10                 # Number of deciles for lift calculation
     fit_threshold: 0.70      # Minimum acceptable fit quality (0-1)
     steepness: 20.0          # Sigmoid penalty sharpness below threshold
-    power_weight: 0.25       # Weight of model_power in combined score
+    power_weight: 0.2        # Weight of model_power in combined score
     power_norm_cap: 0.50     # Normalization cap for model_power
 
 # Scoring Configuration (holdout, new data, production)
