@@ -153,14 +153,15 @@ def _prepare_model_data_part3(
             temp_train['target'] = temp_train[target_col] / temp_train['glm_pred']
         
         # If target already includes PD (e.g. combined pp_bi_pp_pd), don't add PD loss again
-        add_pd = "pp_pd" in temp_train.columns and "pp_pd" not in target_col
+        add_pd = ("pp_pd" in temp_train.columns and "ee_pd_imps" in temp_train.columns
+                  and "pp_pd" not in target_col)
         top_100_report = generate_top_targets_report(
             df=temp_train,
             target_col='target',
             pp_bi_col=target_col,
             pp_pd_col="pp_pd" if add_pd else None,
             ee_bi_col=exposure_col,
-            ee_pd_col="ee_pd_imps" if add_pd and "ee_pd_imps" in temp_train.columns else None,
+            ee_pd_col="ee_pd_imps" if add_pd else None,
             incurred_bi_col="incurred_raw_bi_imps" if "incurred_raw_bi_imps" in temp_train.columns else None,
             incurred_pd_col="incurred_raw_pd_imps" if "incurred_raw_pd_imps" in temp_train.columns else None,
             glm_col='glm_pred' if target_method == "residual" else None,

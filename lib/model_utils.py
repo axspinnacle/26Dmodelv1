@@ -666,7 +666,9 @@ def generate_top_targets_report(
     
     # Calculate losses
     top_n['loss_bi'] = top_n[pp_bi_col] * top_n[ee_bi_col]
-    if pp_pd_col in top_n.columns and ee_pd_col in top_n.columns:
+    # PD only when both PP and exposure columns exist (avoids None -> KeyError [nan])
+    has_pd = bool(pp_pd_col and ee_pd_col and pp_pd_col in top_n.columns and ee_pd_col in top_n.columns)
+    if has_pd:
         top_n['loss_pd'] = top_n[pp_pd_col] * top_n[ee_pd_col]
         top_n['loss_total'] = top_n['loss_bi'] + top_n['loss_pd']
     else:
@@ -676,12 +678,12 @@ def generate_top_targets_report(
     # Select columns for report
     report_cols = [target_col, pp_bi_col, ee_bi_col, 'loss_bi']
     
-    if pp_pd_col in top_n.columns:
+    if has_pd:
         report_cols.extend([pp_pd_col, ee_pd_col, 'loss_pd', 'loss_total'])
     
-    if incurred_bi_col in top_n.columns:
+    if incurred_bi_col and incurred_bi_col in top_n.columns:
         report_cols.append(incurred_bi_col)
-    if incurred_pd_col in top_n.columns:
+    if incurred_pd_col and incurred_pd_col in top_n.columns:
         report_cols.append(incurred_pd_col)
     if glm_col and glm_col in top_n.columns:
         report_cols.append(glm_col)
