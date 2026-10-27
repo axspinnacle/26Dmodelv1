@@ -124,7 +124,7 @@ execution:
     stage_04b: true
     stage_04c: true
     stage_05a: true
-    stage_05b: false
+    stage_05b: true
     stage_05c: true
     stage_06: true
     stage_07: true

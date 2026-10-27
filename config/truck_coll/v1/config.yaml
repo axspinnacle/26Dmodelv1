@@ -130,7 +130,7 @@ execution:
     stage_04b: true   # Train/test split by fold
     stage_04c: true   # Feature encoding + model prep
     stage_05a: true   # Initial model fit (validation)
-    stage_05b: false   # Hyperparameter optimization
+    stage_05b: true   # Hyperparameter optimization
     stage_05c: true   # Production model training
     stage_06: true    # SHAP dataframe
     stage_07: true    # SHAP analysis & plot from df
