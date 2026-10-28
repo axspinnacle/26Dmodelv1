@@ -7,7 +7,7 @@ experiment:
   target: "pp_pip"
   exposure: "ee_pip_imps"
   coverage: "pip"
-  loss_cap: 100000  # No capping for PIP
+  loss_cap: 100000  # PIP loss cap
   loss_type: pip
   exposure_floor: 0.0833  # min exposure (1 month); applied with or without loss_cap
   vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion

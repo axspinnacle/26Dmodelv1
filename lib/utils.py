@@ -63,6 +63,21 @@ def get_machine_config(config_path: str) -> dict:
     return config['machines'][pc_key]
 
 
+def seed_best_params(config_path: str, output_base: str) -> None:
+    """Copy {config_path}/05b_best_params.yaml to {output_base}/results/ if results has none (05b off)."""
+    import shutil
+    src = Path(config_path) / '05b_best_params.yaml'
+    dst = Path(output_base) / 'results' / '05b_best_params.yaml'
+    if dst.exists():
+        print(f"Best params: using existing {dst}")
+    elif src.exists():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(src, dst)
+        print(f"Best params: copied {src} -> {dst}")
+    else:
+        print(f"Best params: none in {src} or {dst} (stage 05b must run)")
+
+
 def load_config(config_path: str) -> dict:
     """Load full config + add current machine paths. Usage: cfg = load_config('config/car_coll/v1/config.yaml')"""
     with open(config_path, 'r') as f:

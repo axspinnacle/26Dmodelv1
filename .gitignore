@@ -3,6 +3,7 @@
 current.pc
 .python-version
 .vscode/
+.ipynb_checkpoints/
 
 # Python
 *.pyc

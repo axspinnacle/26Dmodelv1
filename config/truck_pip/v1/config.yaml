@@ -7,7 +7,7 @@ experiment:
   target: "pp_pip"
   exposure: "ee_pip_imps"
   coverage: "pip"
-  loss_cap: null  # No capping for PIP
+  loss_cap: 100000  # PIP loss cap
   loss_type: pip
   exposure_floor: 0.0833  # min exposure (1 month); applied with or without loss_cap
   vehicle_type: "TRUCK"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
@@ -101,7 +101,7 @@ model:
   target_method: "residual"  # "residual" (GBM learns PP/GLM ratio) or "direct" (GBM learns PP)
   use_glm_init: true
   glm_init_transform: "log"
-  glm_prediction_column: "pred_pp_pip"
+  glm_prediction_column: "pred_pp_liab_1p"  # 1p GLM column is the PIP GLM
 
 # XGBoost parameters
 xgboost:

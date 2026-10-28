@@ -75,6 +75,23 @@ def load_exclusions(
     return excluded
 
 
+def expand_exclusions(exclusions: List[str], encoding_summary: pd.DataFrame) -> List[str]:
+    """
+    Map excluded source columns to the columns they produced after encoding
+    (e.g. one-hot vc_softtop_raw -> vc_softtop_raw_0, vc_softtop_raw_4, ...).
+    Uses encoding_summary['output_columns'] from apply_master_encoding.
+    """
+    out = set(exclusions)
+    produced = encoding_summary.set_index('original_column')['output_columns'].astype(str)
+    for col in exclusions:
+        if col in produced.index and produced[col] != 'SKIPPED':
+            out.update(c.strip() for c in produced[col].split(','))
+    added = sorted(out - set(exclusions))
+    if added:
+        print(f"Exclusions expanded to encoded columns: {added}")
+    return sorted(out)
+
+
 def load_glm_predictions(
     aux_data_path: str,
     control_file: str,
@@ -204,6 +221,28 @@ def load_glm_init(
     return base_margin
 
 
+def save_model_features(booster, output_base: str, stage: str = "05c") -> pd.DataFrame:
+    """
+    Save every model feature with its XGBoost total-gain rank (1 = most important).
+    Features never used in a split get a blank rank.
+    Writes {output_base}/results/{stage}_model_features.csv (columns: feature, xgb_rank).
+    """
+    gain = booster.get_score(importance_type='total_gain')
+    df = pd.DataFrame({'feature': booster.feature_names})
+    df['gain'] = df['feature'].map(gain)
+    df['xgb_rank'] = df['gain'].rank(ascending=False, method='first').astype('Int64')
+    df = df.sort_values('xgb_rank', na_position='last')[['feature', 'xgb_rank']]
+
+    out_file = f"{output_base}/results/{stage}_model_features.csv"
+    df.to_csv(out_file, index=False)
+    print(f"  Model features: {out_file} ({len(df)} features, {df['xgb_rank'].notna().sum()} used)")
+    return df
+
+
+# Loss/exposure/premium/claim prefixes - never allowed as model features
+LEAKAGE_PREFIXES = ('pp_', 'ee_', 'ep_', 'incurred_', 'claim_', 'incloss_')
+
+
 def apply_feature_filters(
     features: List[str],
     exclusions: List[str],
@@ -214,7 +253,7 @@ def apply_feature_filters(
 ) -> List[str]:
     """
     Filter out excluded features from feature list.
-    Automatically excludes target, exposure, and join_key to prevent data leakage.
+    Automatically excludes target, exposure, join_key and any LEAKAGE_PREFIXES column.
     
     Args:
         features: List of all features
@@ -244,6 +283,12 @@ def apply_feature_filters(
         all_exclusions.add(join_key)
         auto_exclude.append(f"join_key={join_key}")
     
+    # Leakage guard: drop loss/exposure/premium/claim columns regardless of config
+    leakage = sorted(f for f in features if f.startswith(LEAKAGE_PREFIXES))
+    if leakage:
+        all_exclusions.update(leakage)
+        print(f"Leakage guard: dropped {len(leakage)} features: {leakage}")
+
     # Filter features
     filtered = [f for f in features if f not in all_exclusions]
     
