@@ -13,6 +13,9 @@ __pycache__/
 # Data files
 *.parquet
 
+# Pipeline outputs (keep tuned params in config/<model>/<version>/05b_best_params.yaml)
+output/
+
 # Documentation (machine-specific)
 documentation/
 plots/

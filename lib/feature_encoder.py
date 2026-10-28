@@ -126,6 +126,13 @@ def apply_master_encoding(train_df, test_df, config_path, min_frequency=0.01, mi
     return train_encoded, test_encoded, encoders, encoding_summary
 
 
+def _to_category_str(series):
+    """NaN -> '__MISSING__', everything else -> str.
+    Fill before astype(str): pandas 3 keeps NaN as float (pandas 2 gave 'nan')."""
+    s = series.astype('object')
+    return s.where(s.notna(), '__MISSING__').astype(str).replace('nan', '__MISSING__')
+
+
 def _encode_one_hot(train_series, test_series, col_name, group_rare=False, 
                    min_frequency=0.01, min_count=50):
     """One-hot encode with __OTHER__ and __MISSING__ handling"""
@@ -134,8 +141,8 @@ def _encode_one_hot(train_series, test_series, col_name, group_rare=False,
     
     # Convert to string, handle NaN as __MISSING__
     # Use object dtype to avoid ArrowStringArray issues
-    train_str = train_series.astype('object').astype(str).replace('nan', '__MISSING__')
-    test_str = test_series.astype('object').astype(str).replace('nan', '__MISSING__')
+    train_str = _to_category_str(train_series)
+    test_str = _to_category_str(test_series)
     
     # Group rare categories if requested
     category_map = None
@@ -202,44 +209,56 @@ def _encode_one_hot(train_series, test_series, col_name, group_rare=False,
     return train_df, test_df, encoder_obj, summary
 
 
-def _encode_binary(train_series, test_series, col_name, encoding_str):
-    """Apply binary mapping like 'binary: {0,1,2}->0 | {3,4,5}->1'"""
+def _apply_binary(series, encoding_str):
+    """Map values with a rule like 'binary: {0,1,2}->0 | {3,4,5}->1' (other values -> NaN).
+    Shared by training (04c) and scoring (08)."""
     import re
-    match = re.search(r'\{([^}]+)\}->0.*\{([^}]+)\}->1', encoding_str)
+    match = re.search(r'\{([^}]+)\}->0.*\{([^}]+)\}->1', str(encoding_str))
     if not match:
         raise ValueError(f"Cannot parse binary encoding: {encoding_str}")
-    
+
     low_set = set(int(x.strip()) for x in match.group(1).split(','))
     high_set = set(int(x.strip()) for x in match.group(2).split(','))
-    
+
     def mapper(v):
         if pd.isna(v):
             return np.nan
         v_int = int(round(v))
         return 0.0 if v_int in low_set else (1.0 if v_int in high_set else np.nan)
-    
-    train_encoded = train_series.map(mapper).astype('float32').to_frame()
-    test_encoded = test_series.map(mapper).astype('float32').to_frame()
-    
+
+    return series.map(mapper).astype('float32')
+
+
+def _remap_2to4(series, as_float=True):
+    """Remap 2 -> 4, keep other values (NaN stays NaN). Shared by training and scoring."""
+    def remap(v):
+        if pd.isna(v):
+            return v
+        v_int = int(round(v))
+        out = 4 if v_int == 2 else v_int
+        return float(out) if as_float else out
+    return series.map(remap)
+
+
+def _encode_binary(train_series, test_series, col_name, encoding_str):
+    """Apply binary mapping like 'binary: {0,1,2}->0 | {3,4,5}->1'"""
+    train_encoded = _apply_binary(train_series, encoding_str).to_frame()
+    test_encoded = _apply_binary(test_series, encoding_str).to_frame()
+
     summary = {
         'original_column': col_name, 'encoding_type': 'binary',
         'output_columns': col_name, 'n_categories': 2,
-        'has_other': False, 'has_missing': False
+        'has_other': False, 'has_missing': False,
+        'encoding_rule': encoding_str  # used by apply_saved_encoders in scoring
     }
-    
+
     return train_encoded, test_encoded, summary
 
 
 def _encode_remap_ordinal(train_series, test_series, col_name):
     """Remap 2->4, keep as ordinal"""
-    def remap(v):
-        if pd.isna(v):
-            return v
-        v_int = int(round(v))
-        return 4.0 if v_int == 2 else float(v_int)
-    
-    train_encoded = train_series.map(remap).astype('float32').to_frame()
-    test_encoded = test_series.map(remap).astype('float32').to_frame()
+    train_encoded = _remap_2to4(train_series).astype('float32').to_frame()
+    test_encoded = _remap_2to4(test_series).astype('float32').to_frame()
     
     summary = {
         'original_column': col_name, 'encoding_type': 'remap_2to4_then_ordinal',
@@ -252,16 +271,13 @@ def _encode_remap_ordinal(train_series, test_series, col_name):
 
 def _encode_remap_ohe(train_series, test_series, col_name):
     """Remap 2->4, then one-hot encode"""
-    def remap(v):
-        if pd.isna(v):
-            return v
-        v_int = int(round(v))
-        return 4 if v_int == 2 else v_int
-    
-    train_remapped = train_series.map(remap)
-    test_remapped = test_series.map(remap)
-    
-    return _encode_one_hot(train_remapped, test_remapped, col_name, group_rare=False)
+    train_remapped = _remap_2to4(train_series, as_float=False)
+    test_remapped = _remap_2to4(test_series, as_float=False)
+
+    tr, te, enc_obj, summary = _encode_one_hot(train_remapped, test_remapped, col_name, group_rare=False)
+    # Record the real type so scoring applies the same 2->4 remap first
+    summary['encoding_type'] = 'remap_2to4_then_ohe'
+    return tr, te, enc_obj, summary
 
 
 def save_encoders(encoders, encoding_summary, output_path):
@@ -319,9 +335,31 @@ def load_encoders(output_path):
     return encoders, encoding_summary
 
 
-def apply_saved_encoders(data_df, encoders, encoding_summary):
-    """Apply saved encoders to new data (e.g., holdout set)"""
+def _master_rules(config_path):
+    """column -> encoding string from master_feature_encoding.csv (empty if not found)."""
+    if config_path is None:
+        return {}
+    p = Path(config_path) / "config_generated" / "master_feature_encoding.csv"
+    if not p.exists():
+        print(f"[!]  {p} not found - binary rules only from encoding summary")
+        return {}
+    enc = pd.read_csv(p)
+    return dict(zip(enc['column_name'], enc['encoding'].astype(str)))
+
+
+def apply_saved_encoders(data_df, encoders, encoding_summary, config_path=None):
+    """
+    Apply saved encoders to new data (e.g., holdout set), reproducing 04c exactly.
+
+    binary / remap rules: taken from encoding_summary['encoding_rule'] (04c runs after
+    this fix) or, for older summaries, from config_path/config_generated/
+    master_feature_encoding.csv. Older summaries also record remap_2to4_then_ohe as
+    'one_hot'; the master file is used to detect those.
+    """
     encoded_parts = []
+    rules = _master_rules(config_path)
+    has_rule_col = 'encoding_rule' in encoding_summary.columns
+    fixed = {'binary': 0, 'remap_2to4_then_ordinal': 0, 'remap_2to4_then_ohe': 0}
     
     for _, row in encoding_summary.iterrows():
         col = row['original_column']
@@ -334,8 +372,23 @@ def apply_saved_encoders(data_df, encoders, encoding_summary):
             print(f"[!]  Column '{col}' not in data, skipping")
             continue
         
-        if enc_type in ['numeric', 'ordinal_0_5', 'binary', 'remap_2to4_then_ordinal']:
+        # Older summaries: one_hot that was really remap_2to4_then_ohe
+        if enc_type == 'one_hot' and rules.get(col) in ('remap_2to4_then_ohe', 'remap_2to4_then_one_hot'):
+            enc_type = 'remap_2to4_then_ohe'
+        
+        if enc_type in ['numeric', 'ordinal_0_5']:
             encoded_parts.append(data_df[[col]].astype('float32'))
+        
+        elif enc_type == 'binary':
+            rule = row['encoding_rule'] if has_rule_col and pd.notna(row['encoding_rule']) else rules.get(col)
+            if not rule or 'binary' not in str(rule):
+                raise ValueError(f"No binary rule for '{col}': pass config_path or rerun 04c")
+            encoded_parts.append(_apply_binary(data_df[col], rule).to_frame())
+            fixed['binary'] += 1
+        
+        elif enc_type == 'remap_2to4_then_ordinal':
+            encoded_parts.append(_remap_2to4(data_df[col]).astype('float32').to_frame())
+            fixed['remap_2to4_then_ordinal'] += 1
         
         elif enc_type in ['one_hot', 'group_then_ohe', 'remap_2to4_then_ohe']:
             if col not in encoders:
@@ -345,17 +398,13 @@ def apply_saved_encoders(data_df, encoders, encoding_summary):
             enc_obj = encoders[col]
             series = data_df[col].copy()
             
-            # Remap if needed
+            # Remap if needed (same function as 04c)
             if enc_type == 'remap_2to4_then_ohe':
-                def remap(v):
-                    if pd.isna(v):
-                        return v
-                    v_int = int(round(v))
-                    return 4 if v_int == 2 else v_int
-                series = series.map(remap)
+                series = _remap_2to4(series, as_float=False)
+                fixed['remap_2to4_then_ohe'] += 1
             
             # Convert to string, handle NaN
-            series_str = series.astype('object').astype(str).replace('nan', '__MISSING__')
+            series_str = _to_category_str(series)
             
             # Apply category mapping if exists
             if enc_obj['category_map']:
@@ -379,6 +428,6 @@ def apply_saved_encoders(data_df, encoders, encoding_summary):
             encoded_parts.append(encoded_df)
     
     result = pd.concat(encoded_parts, axis=1)
-    print(f"[OK] Applied saved encoders: {result.shape}")
+    print(f"[OK] Applied saved encoders: {result.shape} (mapped: {fixed})")
     return result
 
