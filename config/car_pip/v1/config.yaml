@@ -7,7 +7,7 @@ experiment:
   target: "pp_pip"
   exposure: "ee_pip_imps"
   coverage: "pip"
-  loss_cap: 125000  # No capping for PIP
+  loss_cap: 100000  # No capping for PIP
   loss_type: pip
   exposure_floor: 0.0833  # min exposure (1 month); applied with or without loss_cap
   vehicle_type: "CAR"  # CAR, SUV, TRUCK, VAN - used for monotonicity/exclusion
@@ -124,14 +124,14 @@ xgboost:
 # Execution control
 execution:
   stages:
-    stage_01: false   # Data assembly
-    stage_02: false   # Data conditioning  
-    stage_03: false   # Verification
-    stage_04a: false  # PCA feature engineering
-    stage_04b: false   # Train/test split by fold
-    stage_04c: false   # Feature encoding + model prep
-    stage_05a: false   # Initial model fit (validation)
-    stage_05b: false   # Hyperparameter optimization
+    stage_01: true   # Data assembly
+    stage_02: true   # Data conditioning  
+    stage_03: true   # Verification
+    stage_04a: true  # PCA feature engineering
+    stage_04b: true   # Train/test split by fold
+    stage_04c: true   # Feature encoding + model prep
+    stage_05a: true   # Initial model fit (validation)
+    stage_05b: true   # Hyperparameter optimization
     stage_05c: true   # Production model training
     stage_06: true    # SHAP dataframe
     stage_07: true    # SHAP analysis & plot from df
