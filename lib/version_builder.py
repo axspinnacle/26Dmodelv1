@@ -41,6 +41,16 @@ def _is_numeric_encoding(enc):
     return enc in ('numeric', 'ordinal_0_5', 'remap_2to4_then_ordinal') or str(enc).startswith('binary')
 
 
+KNOWN_ENCODINGS = ('numeric', 'ordinal_0_5', 'remap_2to4_then_ordinal', 'one_hot', 'one_hot_encode',
+                   'group_then_ohe', 'remap_2to4_then_ohe', 'remap_2to4_then_one_hot')
+
+
+def _is_known_encoding(enc):
+    """Encodings apply_master_encoding understands (anything else is silently skipped in 04c)."""
+    e = str(enc)
+    return e in KNOWN_ENCODINGS or e.startswith('binary:') or e.startswith('group_then_ohe:')
+
+
 def _numeric_share(master_path, cols, n_rows=200000):
     """Share of non-null, non-'nan' values that parse as numbers, from the first n_rows."""
     if not cols:
@@ -59,7 +69,9 @@ def _update_config_text(text, model, src_version, dst_version):
     """Rename experiment, update output paths, enable full run with 05b off."""
     # experiment name: first "name:" line, swap trailing _{src} -> _{dst} (car_coll_v1, car_liab3p_v1)
     text = re.sub(rf'^(\s*name:\s*"?[^"\n#]*?)_{src_version}("?)', rf'\1_{dst_version}\2', text, count=1, flags=re.M)
-    text = re.sub(r'(description:\s*"?)([^"\n]*?)("?\s*$)', rf'\1\2 - {dst_version} full feature list\3',
+    text = re.sub(r'(description:\s*"?)([^"\n]*?)("?\s*$)',
+                  lambda m: f"{m.group(1)}{re.sub(r' - v[0-9]+ full feature list', '', m.group(2))}"
+                            f" - {dst_version} full feature list{m.group(3)}",
                   text, count=1, flags=re.M)
     # output paths ending in /{model}/{src}, quoted or not
     text = re.sub(rf'/{model}/{src_version}(?=["\s]|$)', f'/{model}/{dst_version}', text, flags=re.M)
@@ -193,11 +205,92 @@ def build_full_feature_version(project_root, model, src_version='v1', dst_versio
 
 
 
-def check_full_feature_version(project_root, model, src_version='v1', dst_version='v3', aux_columns=None,
-                               verbose_excluded=True):
-    """Validate dst version against src. Returns list of problems (empty = OK)."""
+IMPUTED_SUFFIXES = ('_imps', '_impa', '_impm', '_imp')
+
+
+def apply_feature_rules(project_root, model, version, base_version='v1',
+                        drop_raw_with_imputed=True, skip=(), group_ohe=None,
+                        to_numeric=(), aux_columns=None, verbose=True):
+    """
+    Edit config/{model}/{version} feature choices in master_feature_encoding.csv, then
+    rebuild the load list (base_version rows unchanged + enabled master columns).
+
+    Args:
+        drop_raw_with_imputed: skip every enabled X_raw that has an enabled X_imps/_impa/_impm/_imp
+        skip: columns to set to 'skip'
+        group_ohe: {column: min_frequency} -> 'group_then_ohe:<freq>' (rare levels -> __OTHER__)
+        to_numeric: columns to encode as 'numeric' (text columns get a type conversion)
+    Returns:
+        dict summary
+    """
+    from utils import load_config
+
     project_root = Path(project_root)
-    src = project_root / 'config' / model / src_version
+    dst = project_root / 'config' / model / version
+    base = project_root / 'config' / model / base_version
+    cfg = load_config(str(dst / 'config.yaml'))
+    master_path = Path(cfg['machine']['paths']['master_data_path']) / cfg['data']['master_file']
+    master_types = {f.name: str(f.type) for f in pq.read_schema(master_path)}
+    aux_columns = set(aux_columns) if aux_columns is not None else _aux_columns(cfg, base)
+    tag = f'{version}_rule'
+
+    # 1. Encoding edits (text read/write keeps untouched rows identical)
+    enc_eol = _eol(dst / ENC_FILE)
+    enc = pd.read_csv(dst / ENC_FILE, dtype=str, keep_default_na=False)
+    on = set(enc.loc[~enc['encoding'].isin(SKIP_ENCODINGS), 'column_name'])
+
+    raw_skip = []
+    if drop_raw_with_imputed:
+        raw_skip = sorted(c for c in on if c.endswith('_raw')
+                          and any(c[:-4] + s in on for s in IMPUTED_SUFFIXES))
+    skip_all = sorted(set(raw_skip) | set(skip))
+    enc.loc[enc['column_name'].isin(skip_all), ['encoding', 'source']] = ['skip', tag]
+    for c in to_numeric:
+        enc.loc[enc['column_name'] == c, ['encoding', 'source']] = ['numeric', tag]
+    for c, freq in (group_ohe or {}).items():
+        enc.loc[enc['column_name'] == c, ['encoding', 'source']] = [f'group_then_ohe:{freq}', tag]
+    missing = [c for c in list(skip) + list(to_numeric) + list(group_ohe or {}) if c not in set(enc['column_name'])]
+    if missing:
+        raise ValueError(f"{model}: not in encoding file: {missing}")
+    enc.to_csv(dst / ENC_FILE, index=False, lineterminator=enc_eol)
+
+    # 2. Type conversions for text columns turned numeric
+    tc_eol = _eol(dst / 'type_conversions.csv')
+    tc = pd.read_csv(dst / 'type_conversions.csv', dtype=str, keep_default_na=False)
+    add_tc = [c for c in to_numeric if master_types.get(c) in STRING_TYPES and c not in set(tc['column_name'])]
+    if add_tc:
+        tc = pd.concat([tc, pd.DataFrame({'column_name': add_tc, 'source_dtype': 'object',
+                                          'target_dtype': 'numeric', 'notes': tag})])
+        tc.to_csv(dst / 'type_conversions.csv', index=False, lineterminator=tc_eol)
+
+    # 3. Rebuild load list: base rows unchanged + enabled master columns (skipped ones dropped)
+    load_eol = _eol(base / LOAD_FILE)
+    load_lines = (base / LOAD_FILE).read_bytes().decode().rstrip('\r\n').split(load_eol)
+    loaded = set(pd.read_csv(base / LOAD_FILE, comment='#')['column_name'])
+    enabled_df = enc[~enc['encoding'].isin(SKIP_ENCODINGS)]
+    new_cols = [c for c in enabled_df['column_name']
+                if c in master_types and c not in aux_columns and c not in loaded
+                and not c.startswith(LEAKAGE_PREFIXES)]
+    enc_type = enabled_df.set_index('column_name')['encoding']
+    load_lines += [f'{c},{version}_full,N/A,"{version} auto: {enc_type.get(c, "")}"' for c in new_cols]
+    (dst / LOAD_FILE).write_bytes((load_eol.join(load_lines) + load_eol).encode())
+
+    summary = {'model': model, 'raw_skipped': raw_skip, 'skipped': sorted(skip),
+               'to_numeric': list(to_numeric), 'type_conversions_added': add_tc,
+               'group_ohe': dict(group_ohe or {}), 'enabled': len(enabled_df),
+               'load_rows': len(loaded) + len(new_cols)}
+    if verbose:
+        print(f"{model}: {len(raw_skip)} raw->skip, skip={sorted(skip)}, numeric={list(to_numeric)}, "
+              f"group={dict(group_ohe or {})}, enabled={len(enabled_df)}, load rows={summary['load_rows']}")
+    return summary
+
+
+def check_full_feature_version(project_root, model, src_version='v1', dst_version='v3', aux_columns=None,
+                               verbose_excluded=True, base_version='v1'):
+    """Validate dst version. Load-list rows are compared with base_version (v1, the curated list).
+    Returns list of problems (empty = OK)."""
+    project_root = Path(project_root)
+    src = project_root / 'config' / model / base_version
     dst = project_root / 'config' / model / dst_version
     problems = []
 
@@ -230,6 +323,9 @@ def check_full_feature_version(project_root, model, src_version='v1', dst_versio
     leak_on = on[on['column_name'].str.startswith(LEAKAGE_PREFIXES)]['column_name'].tolist()
     if leak_on:
         problems.append(f'leakage enabled in encoding: {leak_on}')
+    unknown = sorted(set(on.loc[~on['encoding'].map(_is_known_encoding), 'encoding']))
+    if unknown:
+        problems.append(f'unknown encodings (04c would skip): {unknown}')
     if aux_columns is not None:
         known = set(load['column_name']) | set(aux_columns)
         missing = [c for c in on['column_name'] if c not in known]

@@ -77,10 +77,16 @@ def apply_master_encoding(train_df, test_df, config_path, min_frequency=0.01, mi
             encoders[col] = enc_obj
             summary_rows.append(summary)
         
-        elif enc_type == 'group_then_ohe':
+        elif enc_type == 'group_then_ohe' or str(enc_type).startswith('group_then_ohe:'):
+            # 'group_then_ohe'      -> keep level if >= min_count rows OR >= min_frequency
+            # 'group_then_ohe:0.01' -> keep level only if >= 1% of rows (frequency only)
+            if ':' in str(enc_type):
+                col_freq, col_count = float(str(enc_type).split(':', 1)[1]), None
+            else:
+                col_freq, col_count = min_frequency, min_count
             tr_encoded, te_encoded, enc_obj, summary = _encode_one_hot(
-                train_df[col], test_df[col], col, 
-                group_rare=True, min_frequency=min_frequency, min_count=min_count
+                train_df[col], test_df[col], col,
+                group_rare=True, min_frequency=col_freq, min_count=col_count
             )
             train_parts.append(tr_encoded)
             test_parts.append(te_encoded)
@@ -150,10 +156,11 @@ def _encode_one_hot(train_series, test_series, col_name, group_rare=False,
         value_counts = train_str.value_counts()
         total = len(train_str)
         
-        # Keep categories that meet threshold
-        keep_cats = value_counts[
-            (value_counts >= min_count) | (value_counts / total >= min_frequency)
-        ].index.tolist()
+        # Keep categories that meet threshold (min_count=None -> frequency only)
+        keep = value_counts / total >= min_frequency
+        if min_count is not None:
+            keep = keep | (value_counts >= min_count)
+        keep_cats = value_counts[keep].index.tolist()
         
         # Always keep __MISSING__ if present
         if '__MISSING__' in value_counts.index and '__MISSING__' not in keep_cats:

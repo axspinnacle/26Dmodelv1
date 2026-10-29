@@ -16,6 +16,9 @@ __pycache__/
 # Pipeline outputs (keep tuned params in config/<model>/<version>/05b_best_params.yaml)
 output/
 
+# Local feature experiments (setup_notebooks/run_experiments.ipynb)
+config/*/x_*/
+
 # Documentation (machine-specific)
 documentation/
 plots/

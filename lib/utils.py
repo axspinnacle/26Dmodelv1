@@ -78,6 +78,62 @@ def seed_best_params(config_path: str, output_base: str) -> None:
         print(f"Best params: none in {src} or {dst} (stage 05b must run)")
 
 
+def aux_feature_columns(cfg, config_path, master_columns, aux_columns):
+    """
+    Columns Stage 01 takes from the aux file: present in aux, also in master, but NOT in the
+    load list (01 loads only listed master columns, then merges the full aux file).
+    Scoring must take these from aux too, or values differ from training
+    (e.g. cef_est_curr_mi_grp_imps differs between master and aux on ~34% of rows).
+    Usage: cols = aux_feature_columns(cfg, config_path, master_data.columns, aux_filtered.columns)
+    """
+    import pandas as pd
+    join_key = cfg['data']['join_key']
+    load_file = cfg['data'].get('columns_to_load_file')
+    path = Path(config_path) / load_file if load_file else None
+    if path is None or not path.exists():
+        return []           # 01 loaded all master columns -> master wins
+    loaded = set(pd.read_csv(path, comment='#')['column_name'])
+    return [c for c in aux_columns if c in set(master_columns) and c not in loaded and c != join_key]
+
+
+PARQUET_COMPRESSION = 'zstd'
+PARQUET_LEVEL = 3
+
+
+def save_parquet(df, path, **kwargs):
+    """Write parquet with zstd level 3 (~25% smaller than snappy, same read speed).
+    Usage: save_parquet(df, f'{output_base}/data/02_conditioned.parquet')"""
+    kwargs.setdefault('compression', PARQUET_COMPRESSION)
+    if kwargs['compression'] == 'zstd':
+        kwargs.setdefault('compression_level', PARQUET_LEVEL)
+    df.to_parquet(path, **kwargs)
+
+
+def downcast_frame(df, verbose=True):
+    """
+    Shrink numeric columns in place: all floats -> float32, integers -> smallest int type.
+    float32 keeps ~7 significant digits (max rel. error ~6e-8), sums are still done
+    in float64 by pandas/numpy. Text/bool/datetime columns are untouched.
+    Usage: data = downcast_frame(data)
+    """
+    import numpy as np
+    import pandas as pd
+    before = df.memory_usage(deep=False).sum()
+    for col in df.columns:
+        s = df[col]
+        if pd.api.types.is_float_dtype(s) and s.dtype != np.float32:
+            df[col] = s.astype(np.float32)
+        elif pd.api.types.is_integer_dtype(s) and not pd.api.types.is_bool_dtype(s):
+            if s.isna().any():          # nullable Int with NA -> keep NaN via float32
+                df[col] = s.astype(np.float32)
+            else:
+                df[col] = pd.to_numeric(s, downcast='integer')
+    if verbose:
+        after = df.memory_usage(deep=False).sum()
+        print(f"  Downcast numeric columns: {before/1e9:.2f} GB -> {after/1e9:.2f} GB in memory")
+    return df
+
+
 def load_config(config_path: str) -> dict:
     """Load full config + add current machine paths. Usage: cfg = load_config('config/car_coll/v1/config.yaml')"""
     with open(config_path, 'r') as f:

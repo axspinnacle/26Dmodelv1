@@ -1,0 +1,5 @@
+field,CAR,SUV,TRUCK,VAN
+vc_cargo_van_raw,1,1,1,0
+vc_electronic_4wd_selector_raw,1,0,0,1
+vc_hill_ascent_assist_raw,1,0,0,1
+vc_softtop_raw,0,0,0,1
