@@ -1,9 +1,0 @@
-# Approximate best params for van_coll (05b not run).
-# Scaled from car_coll 05b result by positive-record ratio. Copy to output/van_coll/v1/results/
-colsample_bytree: 0.7
-learning_rate: 0.05
-max_depth: 2
-min_child_weight: 2000
-reg_lambda: 50
-subsample: 0.7
-tweedie_variance_power: 1.2

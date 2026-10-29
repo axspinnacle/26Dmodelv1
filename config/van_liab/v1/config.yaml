@@ -127,7 +127,8 @@ execution:
     stage_05b: true
     stage_05c: true
     stage_06: true
-    stage_07: true
+    stage_07a: true   # SHAP summary (importance tables, overall charts)
+    stage_07b: true   # SHAP per-feature plots (residual + range)
     stage_08: true
     stage_08b: true
     stage_09: false
@@ -190,6 +191,9 @@ analysis:
     file: scoring/holdout/predictions.parquet
 shap_analysis:
   top_n_features: 40
+  train_sample: 200000  # stage 06 train SHAP rows ("all" = every train row)
+  display_plots: true  # stage 07b: show plots in notebook (false = save only)
+  beeswarm_rows: 50000  # stage 07a: max dots per beeswarm (drawn proportional to exposure)
   datasets:
   - train
   - test

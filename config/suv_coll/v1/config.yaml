@@ -133,7 +133,8 @@ execution:
     stage_05b: false   # Hyperparameter optimization
     stage_05c: true   # Production model training
     stage_06: true    # SHAP dataframe
-    stage_07: true    # SHAP analysis & plot from df
+    stage_07a: true   # SHAP summary (importance tables, overall charts)
+    stage_07b: true   # SHAP per-feature plots (residual + range)
     stage_08: true    # Scoring (holdout/new data)
     stage_08b: true    # Gini analysis (train/test/holdout)
     stage_09: false    # State analysis
@@ -188,6 +189,9 @@ analysis:
 # SHAP Analysis Configuration
 shap_analysis:
   top_n_features: 40  # Number of top features to plot
+  train_sample: 200000  # stage 06 train SHAP rows ("all" = every train row)
+  display_plots: true  # stage 07b: show plots in notebook (false = save only)
+  beeswarm_rows: 50000  # stage 07a: max dots per beeswarm (drawn proportional to exposure)
   datasets: ["train", "test"]  # Which datasets to analyze
   
   residual_plot:

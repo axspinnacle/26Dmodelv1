@@ -81,126 +81,76 @@ def create_residual_plot(data, feature, weight, round_value=2, print_table=False
     return fig, x
 
 
-def create_shap_range_plot(shap_df, data_df, feature, weight_field, 
-                          shap_round_level=3, feature_round_to=1, 
-                          min_ntile=0, max_ntile=0, filter_used_only=False, dataset_label=""):
-    """SHAP range plot across ntiles. Usage: fig, df = create_shap_range_plot(shap_df, data_df, 'feature', 'weight', dataset_label='Train')"""
-    import seaborn as sns
-    
-    # Combine data and SHAP
-    cf_df = data_df[[feature, weight_field]].reset_index(drop=True).copy()
-    cf_df.rename(columns={weight_field: 'weight'}, inplace=True)
-    cf_df['contrib'] = shap_df[feature].reset_index(drop=True)
-    
-    # Rounding
-    if feature_round_to != 0:
-        cf_df[feature] = round(cf_df[feature] / feature_round_to, 0) * feature_round_to
-    cf_df['contrib'] = round(cf_df['contrib'], shap_round_level)
-    
-    # Filter
+def create_shap_range_plot(shap_df, data_df, feature, weight_field,
+                           shap_round_level=3, feature_round_to=1,
+                           min_ntile=0, max_ntile=0, filter_used_only=False, dataset_label="",
+                           max_levels=50):
+    """
+    SHAP spread plot: for each (rounded) feature value, the exposure-weighted SHAP percentiles
+    (0-100, coloured), plus an exposure distribution panel underneath.
+    Features with more than max_levels distinct values are grouped into max_levels quantile bins
+    (each bin plotted at its median value), so every point has enough rows for percentiles.
+    Usage: fig, ntile_df = create_shap_range_plot(shap_df, data_df, 'feature', 'weight', dataset_label='Train')
+    Returns: (figure, DataFrame[feature, ntile, SHAP]) - caller saves and closes the figure.
+    """
+    import seaborn  # noqa: F401  registers the 'vlag' colormap used below
+
+    # Combine feature value, weight and SHAP by position (both frames share row order)
+    cf = pd.DataFrame({
+        feature: pd.to_numeric(data_df[feature], errors='coerce').to_numpy(dtype='float64'),
+        'weight': data_df[weight_field].to_numpy(dtype='float64'),
+        'contrib': shap_df[feature].to_numpy(dtype='float64'),
+    })
+    if feature_round_to:
+        cf[feature] = np.round(cf[feature] / feature_round_to) * feature_round_to
+    if max_levels and cf[feature].nunique() > max_levels:
+        bins = pd.qcut(cf[feature], q=max_levels, duplicates='drop')
+        cf[feature] = cf.groupby(bins, observed=True)[feature].transform('median')
+    cf['contrib'] = cf['contrib'].round(shap_round_level)
     if filter_used_only:
-        cf_df = cf_df.loc[cf_df['contrib'].fillna(0) != 0]
-    
-    # Aggregate rounded data
-    cf_df2 = cf_df.groupby([feature, 'contrib']).agg({'weight': 'sum'}).reset_index()
-    
-    # Create ntiles
-    cf_df2['f_cumsum'] = cf_df2.groupby([feature]).weight.cumsum()
-    
-    f_weight = cf_df2.groupby([feature]).agg({'weight': 'sum'}).reset_index()
-    f_weight.rename(columns={'weight': 'f_weight'}, inplace=True)
-    
-    cf_df2 = cf_df2.merge(f_weight)
-    cf_df2['ntile'] = round(cf_df2['f_cumsum'] / cf_df2['f_weight'], 2) * 100
-    cf_df2 = cf_df2.loc[cf_df2['ntile'].notna()]
-    cf_df2['ntile'] = cf_df2['ntile'].astype('int')
-    
-    # Weight SHAP contributions
-    cf_df2['sp'] = cf_df2['contrib'] * cf_df2['weight']
-    
-    # Aggregate by feature and ntile
-    cf_df3 = cf_df2.groupby([feature, 'ntile']).agg({'sp': 'sum', 'weight': 'sum'}).reset_index()
-    cf_df3['SHAP'] = cf_df3['sp'] / cf_df3['weight']
-    del cf_df3['sp'], cf_df3['weight']
-    
-    # Set up SHAP data for plotting (fill missing ntiles)
-    unique_feat_levels = cf_df3[feature].drop_duplicates().tolist()
-    ntiles = [i for i in range(101)]
-    
-    u_df = pd.DataFrame()
-    u_df[feature] = unique_feat_levels
-    u_df['key'] = 0
-    
-    n_df = pd.DataFrame()
-    n_df['ntile'] = ntiles
-    n_df['key'] = 0
-    
-    df_levels = u_df.merge(n_df)
-    del df_levels['key']
-    
-    cf_df3.sort_values(by=[feature, 'ntile'], inplace=True)
-    df_levels.sort_values(by=[feature, 'ntile'], inplace=True)
-    
-    df = pd.DataFrame()
-    for i in unique_feat_levels:
-        a = df_levels.loc[df_levels[feature] == i].copy()
-        b = cf_df3.loc[cf_df3[feature] == i].copy()
-        
-        # Fill upwards
-        a['ntile'] = a['ntile'].astype('int32')
-        b['ntile'] = b['ntile'].astype('int32')
-        c = pd.merge_asof(a, b, on='ntile')
-        
-        # Fill downwards
-        lowest_contrib = c['SHAP'].min()
-        c['SHAP'].fillna(lowest_contrib, inplace=True)
-        
-        df = pd.concat([df, c])
-    
-    df.rename(columns={feature + '_x': feature}, inplace=True)
-    del df[feature + '_y']
-    
-    # Apply ntile filter
+        cf = cf.loc[cf['contrib'].fillna(0) != 0]
+
+    # Weighted SHAP percentile within each feature value
+    g = cf.groupby([feature, 'contrib'], sort=True)['weight'].sum().reset_index()
+    g['f_cumsum'] = g.groupby(feature)['weight'].cumsum()
+    g['f_weight'] = g.groupby(feature)['weight'].transform('sum')
+    g = g.loc[g['f_weight'] > 0]
+    g['ntile'] = np.rint(g['f_cumsum'] / g['f_weight'] * 100).astype(int)
+    g['sp'] = g['contrib'] * g['weight']
+    nt = g.groupby([feature, 'ntile'])[['sp', 'weight']].sum()
+    nt['SHAP'] = nt['sp'] / nt['weight']
+
+    # All 0-100 ntiles per value: carry last SHAP upward, fill below first with the lowest SHAP
+    wide = nt['SHAP'].unstack('ntile').reindex(columns=range(101))
+    wide = wide.ffill(axis=1)
+    wide = wide.apply(lambda r: r.fillna(r.min()), axis=1)
+    df = wide.stack().rename('SHAP').reset_index()
+    df.columns = [feature, 'ntile', 'SHAP']
     if min_ntile == 0 and max_ntile == 0:
         min_ntile, max_ntile = 0, 100
-    df = df.loc[(df['ntile'] >= min_ntile) & (df['ntile'] <= max_ntile)]
-    
-    # Distribution data
-    a = cf_df.groupby([feature]).agg({'weight': 'sum'}).reset_index()
-    b = cf_df.loc[cf_df['contrib'].fillna(0) != 0].groupby([feature]).agg({'weight': 'sum'}).reset_index()
-    b.rename(columns={'weight': 'used_weight'}, inplace=True)
-    
-    c = a.merge(b, how='left')
-    c[feature] = round(c[feature], 4)
-    
-    # Create joint plot
-    g = sns.jointplot(x=df[feature], y=df['SHAP'], c=df['ntile'], height=12, 
-                      joint_kws={"color": None, 'cmap': 'vlag'})
-    
-    g.fig.colorbar(g.ax_joint.collections[0], ax=[g.ax_joint, g.ax_marg_y, g.ax_marg_x], 
-                   use_gridspec=True, orientation='vertical', shrink=.80, anchor=(0, 0), 
-                   label='SHAP Percentile', pad=-.15)
-    
-    g.fig.set_figwidth(12)
-    g.fig.set_figheight(8)
-    
-    g.ax_marg_x.remove()
-    g.ax_marg_y.remove()
-    
-    # Add dataset label to title
-    title = f'[{dataset_label}] Continuous Feature SHAP Spread Plot; {feature}' if dataset_label else f'Continuous Feature SHAP Spread Plot; {feature}'
-    g.fig.suptitle(title, y=.9)
-    
-    # Store the main figure
-    main_fig = g.fig
-    
-    # Create weight distribution bar chart
-    fig2, ax = plt.subplots(figsize=(12, 2))
-    sns.barplot(data=c, x=c[feature], y=c['weight'], color='grey', alpha=.3, ax=ax)
-    sns.barplot(data=c, x=c[feature], y=c['used_weight'], color='orange', alpha=.2, ax=ax)
-    ax.set(xlabel=None, ylabel=None)
-    
-    return main_fig, cf_df3
+    df = df.loc[(df['ntile'] >= min_ntile) & (df['ntile'] <= max_ntile)].reset_index(drop=True)
+
+    # Exposure distribution: total and where the feature is used (SHAP != 0)
+    dist = cf.groupby(feature)['weight'].sum().rename('weight').to_frame()
+    dist['used_weight'] = cf.loc[cf['contrib'].fillna(0) != 0].groupby(feature)['weight'].sum()
+    dist = dist.fillna(0).reset_index()
+
+    fig, (ax, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True,
+                                  gridspec_kw={'height_ratios': [4, 1], 'hspace': 0.05})
+    sc = ax.scatter(df[feature], df['SHAP'], c=df['ntile'], cmap='vlag', s=12)
+    fig.colorbar(sc, ax=[ax, ax2], label='SHAP Percentile', shrink=0.8, pad=0.02)
+    ax.axhline(0, color='grey', linestyle='--', linewidth=0.8, alpha=0.6)
+    ax.set_ylabel('SHAP')
+    title = f'Continuous Feature SHAP Spread Plot; {feature}'
+    ax.set_title(f'[{dataset_label}] {title}' if dataset_label else title)
+    span = dist[feature].max() - dist[feature].min()
+    width = max(span / max(len(dist), 1) * 0.8, 1e-9) if span > 0 else 0.8
+    ax2.bar(dist[feature], dist['weight'], width=width, color='grey', alpha=0.4, label='exposure')
+    ax2.bar(dist[feature], dist['used_weight'], width=width, color='orange', alpha=0.5, label='SHAP != 0')
+    ax2.set_ylabel('Exposure')
+    ax2.set_xlabel(feature)
+    ax2.legend(loc='upper right', fontsize=8)
+    return fig, df
 
 
 def create_feature_importance_plot(shagg_df, top_n=20):
@@ -427,6 +377,4 @@ def create_shap_importance_pct(shap_df, top_n=20, weight_col='weight'):
     
     plt.tight_layout()
     print(f"  SHAP importance % chart created")
-    return fig
-    
     return fig
