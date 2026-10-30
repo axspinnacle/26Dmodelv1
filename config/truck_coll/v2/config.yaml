@@ -137,7 +137,10 @@ execution:
     stage_07b: true   # SHAP per-feature plots (residual + range)
     stage_08: true    # Scoring (holdout/new data)
     stage_08b: true    # Gini analysis (train/test/holdout)
-    stage_09: false    # State analysis
+    stage_09a: true    # Value-adjusted lift (decile + percentile)
+    stage_09b: true    # Company lift
+    stage_09c: true    # Standard vs non-standard lift
+    stage_09d: true    # State lift
   
   stop_on_error: true
   cleanup_memory: true
@@ -187,6 +190,14 @@ analysis:
       file: "scoring/holdout/predictions.parquet"
 
 # SHAP Analysis Configuration
+# Stage 09a-d value-adjusted lift (A = PP/GLM*D, P = PRED/GLM*D); see lib/lift_analysis.py
+value_lift:
+  value_adjust: true  # multiply by Dep_factor (false = plain PP/GLM vs PRED/GLM)
+  datasets: [test_holdout, train]  # test_holdout = test + holdout stacked
+  bins: [10, 100]  # 09a: decile and 100-percentile (09b-d always deciles)
+  segment_file: config/company_segment.csv  # companyid -> standard / non-standard
+  min_group_exposure: 5000  # 09b-d: groups below this use 5 groups instead of 10
+
 shap_analysis:
   top_n_features: 40  # Number of top features to plot
   train_sample: 200000  # stage 06 train SHAP rows ("all" = every train row)

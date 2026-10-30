@@ -29,7 +29,7 @@ ENC_FILE = 'config_generated/master_feature_encoding.csv'
 # Only files the pipeline reads (00 EDA inputs/outputs and setup files are not copied)
 VERSION_FILES = ['config.yaml', LOAD_FILE, 'type_conversions.csv', 'pca_features.csv',
                  'exclusion.csv', 'monotonicity.csv', ENC_FILE]  # + 05b_best_params.yaml
-STAGES_ON = ['01', '02', '03', '04a', '04b', '04c', '05a', '05c', '06', '07a', '07b', '08', '08b']
+STAGES_ON = ['01', '02', '03', '04a', '04b', '04c', '05a', '05c', '06', '07a', '07b', '08', '08b', '09a', '09b', '09c', '09d']
 
 
 def _eol(path):
