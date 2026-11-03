@@ -161,8 +161,8 @@ owt_leasepers_ind,ordinal_0_5,ordinal_0_5,2,0,float64,auto
 owt_number_of_titling_transactions_raw,skip,discrete_numeric,15,0,str,manual
 owt_number_of_titling_transactions_imps,numeric,discrete_numeric,15,0,float64,auto
 owh_loo_days_raw,skip,continuous_numeric,5881,0,str,manual
-owh_loo_days_imps,skip,continuous_numeric,5881,0,float64,manual
-owh_loo_years_cal,one_hot,medium_cardinality_categorical,29,0.92,object,auto
+owh_loo_days_imps,numeric,continuous_numeric,5881,0,float64,auto
+owh_loo_years_cal,skip,medium_cardinality_categorical,29,0.92,object,manual
 owh_loo_years_imp,skip,continuous_numeric,30,0,float64,manual
 cef_est_curr_mi_grp_raw,numeric,continuous_numeric,41,0,str,auto
 cef_est_curr_mi_grp_imps,skip,continuous_numeric,40,0,float64,manual
