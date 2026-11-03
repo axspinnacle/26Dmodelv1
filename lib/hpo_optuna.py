@@ -16,11 +16,9 @@ def run_optuna_search(
     target_method="direct",
     glm_pred_train=None
 ):
-    """
-    Run Optuna optimization over hyperparameters using actuarial lift metrics.
-    Duplicate param combos are not retrained (cached score reused, not logged twice).
+    """Optuna search scored by the lift metric. Repeated param sets reuse the cached score.
 
-    Returns dict with: best_params, best_metrics, best_score, results_df, study
+    Returns dict: best_params, best_metrics, best_score, results_df, study.
     """
     print(f"  n_trials: {n_trials}")
     print(f"  penalty_type: {(scoring_config or {}).get('penalty_type', 'linear')}")

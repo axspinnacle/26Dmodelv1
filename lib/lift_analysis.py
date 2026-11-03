@@ -1,24 +1,8 @@
-"""
-Stage 09 value-adjusted lift: overall (09a), by company (09b), standard vs non-standard (09c),
-by state (09d). All outputs in results/09/ (chart PNG and its table CSV side by side, same name);
-09b-d: one chart + CSV per group in results/09/09x_{dataset}/.
-CSV columns: documentation/ModelMath_v2.md, "Stage 09 Lift Tables".
+"""Stage 09 lift (09a overall, 09b company, 09c segment, 09d state) and the 05c percentile lift.
 
-Value-adjusted lift (documentation/ModelMath_v2.md):
-    Upstream the loss was divided by the depreciation factor D (L_adj = L_raw / D) and the GLM
-    carries D as an offset. Multiplying back by D shows actual vs predicted loss with state /
-    year / model year (rest of the GLM) controlled:
-        Actual    A = (PP / GLM) * D = y * D
-        Predicted P = (PRED / GLM) * D = gbm * D
-    Rows are sorted by P and cut into exposure-weighted ntiles. value_adjust=False drops D
-    (plain y vs gbm ratio lift).
-
-Datasets: 'train', 'test', 'holdout', 'test_holdout' (test + holdout stacked; disjoint folds).
-    train/test: results/05c_debug_{train,test}.parquet; holdout: scoring/holdout/predictions.parquet.
-    D (Dep_factor) and companyid are always joined from the source files on the join key.
-
-Usage: see templates/09a_value_lift.ipynb, 09b_company_lift.ipynb, 09c_segment_lift.ipynb,
-       09d_state_analysis.ipynb.
+Value-adjusted: A = PP/GLM x D, P = PRED/GLM x D (D = Dep_factor), sorted by P into equal-exposure groups.
+value_adjust=False drops D. Column definitions: ModelMath_v2.md, "Stage 09 Lift Tables".
+Datasets: train, test, holdout, test_holdout (test + holdout stacked).
 """
 
 import os
@@ -31,7 +15,7 @@ import matplotlib.pyplot as plt
 FRAME_COLS = ['actual', 'pred', 'weight', 'source']
 
 
-# ---------------------------------------------------------------- data
+# data
 
 def _source_lookup(path, key, cols, keys):
     """Read `cols` for `keys` from a parquet file (stream-filtered); index = key, unique."""
@@ -64,13 +48,9 @@ MASTER_COLS = {'companyid': 'companyid', 'state': 'st_raw'}  # group name -> mas
 
 
 def lift_frame(output_base, cfg, pc_id, dataset, value_adjust=True, groups=()):
-    """
-    Record-level lift input for one dataset.
-    Args:
-        groups: group columns to join from the master file, names from MASTER_COLS ('companyid', 'state')
-    Returns DataFrame(index=key): actual, pred, weight, source [, dep_factor] [, groups...].
-        actual = (pp / glm) * D, pred = (pred / glm) * D   (D = 1 if value_adjust is False)
-    Rows with missing / non-positive D or GLM, or zero exposure, are dropped (count printed).
+    """Row-level lift input for one dataset: actual, pred, weight, source, plus dep_factor and groups.
+
+    groups are joined from the master file (names in MASTER_COLS). Rows with bad D, GLM or exposure are dropped.
     """
     parts = ['test', 'holdout'] if dataset == 'test_holdout' else [dataset]
     frames = []
@@ -120,16 +100,13 @@ def add_segment(df, segment_file):
     return df
 
 
-# ---------------------------------------------------------------- lift tables
+# lift tables
 
 def ntile_lift(df, bins=10, actual='actual', pred='pred', weight='weight'):
-    """
-    Exposure-weighted ntile lift. Rows sorted by pred; a record goes to the ntile containing the
-    midpoint of its exposure (no rounding, equal exposure per ntile up to one record).
-    Columns: ntile, n_records, exposure, exposure_pct, actual, pred (exposure-weighted means),
-             actual_rel, pred_rel (relative to overall pred mean), a_to_p,
-             [actual_no_dep, pred_no_dep: same groups, means without D; only if df has dep_factor].
-    Column definitions: documentation/ModelMath_v2.md, "Stage 09 Lift Tables".
+    """Exposure-weighted lift table. Each row goes to the ntile holding the midpoint of its exposure.
+
+    Actual/pred are exposure-weighted means; *_rel is relative to the overall pred mean.
+    Adds actual_no_dep / pred_no_dep when df has dep_factor.
     """
     a = df[actual].to_numpy('float64')
     p = df[pred].to_numpy('float64')
@@ -205,7 +182,7 @@ def group_lift(df, group_col, bins=10, min_exposure=0.0, small_bins=5):
     return tables, s
 
 
-# ---------------------------------------------------------------- plots
+# plots
 
 def _draw(ax, t, title):
     many = len(t) > 20
@@ -279,6 +256,31 @@ def save_group_lifts(tables, summary, group_col, title_prefix, out_dir, file_pre
         name = re.sub(r'[^A-Za-z0-9._-]+', '_', str(g))
         paths[g] = save_lift(tables[g], title, f'{out_dir}/{file_prefix}_{rank:02d}_{name}')
     return paths
+
+
+def percentile_lift_05c(output_base, datasets=('train', 'test'), bins=100, show=True):
+    """05c percentile lift on capped PP from results/05c_debug_{dataset}.parquet.
+
+    Saves results/05c_lift_{dataset}_100.png + .csv. Works on old runs without retraining.
+    """
+    from IPython.display import Image, display
+    out = {}
+    for ds_name in datasets:
+        f = f'{output_base}/results/05c_debug_{ds_name}.parquet'
+        if not os.path.exists(f):
+            print(f'  [WARN] Missing {f}')
+            continue
+        d = pd.read_parquet(f, columns=['pp_actual', 'pp_predicted', 'exposure'])
+        d.columns = ['actual', 'pred', 'weight']
+        d = d[np.isfinite(d['actual']) & np.isfinite(d['pred']) & (d['weight'] > 0)]
+        t = ntile_lift(d, bins)
+        png = save_lift(t, f'05c {ds_name.title()} Lift - {bins} percentiles (PP, capped)',
+                        f'{output_base}/results/05c_lift_{ds_name}_{bins}')
+        print(f'  Saved: {png} (+ .csv), {len(d):,} rows')
+        if show:
+            display(Image(png))
+        out[ds_name] = t
+    return out
 
 
 def stack_tables(tables, key_col):

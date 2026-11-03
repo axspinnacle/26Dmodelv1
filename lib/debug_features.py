@@ -16,11 +16,7 @@ def sample_data(df, frac=0.1, seed=42):
 
 
 def check_target_distribution(target_series, weight_series=None, title="Target Ratio"):
-    """
-    Check distribution of target ratio with histogram and stats.
-    
-    Returns dict with stats.
-    """
+    """Check distribution of target ratio with histogram and stats."""
     data = target_series.dropna()
     
     if weight_series is not None:
@@ -65,20 +61,7 @@ def check_target_distribution(target_series, weight_series=None, title="Target R
 
 
 def calculate_correlations_chunked(df, feature_cols, target_col, chunk_size=50):
-    """
-    Calculate correlations between features and target in chunks to save memory.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-    feature_cols : list - feature column names
-    target_col : str - target column name
-    chunk_size : int - process this many features at a time
-    
-    Returns
-    -------
-    pd.DataFrame with columns: feature, correlation
-    """
+    """Calculate correlations between features and target in chunks to save memory."""
     print(f"\nCalculating correlations for {len(feature_cols)} features...")
     print(f"  Processing in chunks of {chunk_size}")
     
@@ -105,11 +88,7 @@ def calculate_correlations_chunked(df, feature_cols, target_col, chunk_size=50):
 
 
 def summarize_feature_signals(corr_df, threshold=0.05):
-    """
-    Summarize which features have signal above threshold.
-    
-    Returns dict with summary stats.
-    """
+    """Summarize which features have signal above threshold."""
     valid_corr = corr_df.dropna()
     abs_corr = valid_corr['correlation'].abs()
     
@@ -130,24 +109,7 @@ def summarize_feature_signals(corr_df, threshold=0.05):
 
 def run_full_diagnostic(df, feature_cols, target_col, pred_col, weight_col, 
                         sample_frac=0.1, corr_threshold=0.05, chunk_size=50):
-    """
-    Run complete feature diagnostic: sampling, distribution, correlations.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-    feature_cols : list - feature column names  
-    target_col : str - target ratio column name
-    pred_col : str - prediction column name (for comparison)
-    weight_col : str - weight/exposure column
-    sample_frac : float - fraction to sample
-    corr_threshold : float - threshold for "strong" correlation
-    chunk_size : int - features per chunk
-    
-    Returns
-    -------
-    dict with all diagnostic results
-    """
+    """Run complete feature diagnostic: sampling, distribution, correlations."""
     results = {}
     
     # 1. Sample data

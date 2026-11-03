@@ -10,7 +10,6 @@ def get_project_root() -> Path:
     """Find project root by searching up for current.pc file. Usage: root = get_project_root()"""
     current = Path.cwd()
     
-    # Search current directory and all parents
     for directory in [current] + list(current.parents):
         if (directory / 'current.pc').exists():
             return directory
@@ -36,7 +35,6 @@ def setup_notebook_environment():
 
 def get_machine_config(config_path: str) -> dict:
     """Get machine-specific config from current.pc file. Usage: cfg = get_machine_config('config/car_coll/v1/config.yaml')"""
-    # Find project root (where current.pc file is located)
     config_file = Path(config_path)
     project_root = config_file.parent
     while not (project_root / 'current.pc').exists() and project_root != project_root.parent:
@@ -48,11 +46,9 @@ def get_machine_config(config_path: str) -> dict:
             f"current.pc file not found. Create a current.pc file in the project root with a number (1-4)."
         )
     
-    # Read PC number
     with open(pc_file, 'r') as f:
         pc_num = f.read().strip()
     
-    # Load config
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
@@ -63,28 +59,31 @@ def get_machine_config(config_path: str) -> dict:
     return config['machines'][pc_key]
 
 
-def seed_best_params(config_path: str, output_base: str) -> None:
-    """Copy {config_path}/05b_best_params.yaml to {output_base}/results/ if results has none (05b off)."""
+def seed_best_params(config_path: str, output_base: str):
+    """Copy the config's 05b_best_params.yaml into results/ if 05b left none there.
+
+    Returns 'config_default' (same content as the config file), '05b', or None if neither exists.
+    """
     import shutil
     src = Path(config_path) / '05b_best_params.yaml'
     dst = Path(output_base) / 'results' / '05b_best_params.yaml'
-    if dst.exists():
-        print(f"Best params: using existing {dst}")
-    elif src.exists():
+    if not dst.exists():
+        if not src.exists():
+            print(f"Best params: none in {src} or {dst} (stage 05b must run)")
+            return None
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(src, dst)
         print(f"Best params: copied {src} -> {dst}")
-    else:
-        print(f"Best params: none in {src} or {dst} (stage 05b must run)")
+    same = src.exists() and yaml.safe_load(src.read_text()) == yaml.safe_load(dst.read_text())
+    source = 'config_default' if same else '05b'
+    print(f"Best params: {dst} (source: {source})")
+    return source
 
 
 def aux_feature_columns(cfg, config_path, master_columns, aux_columns):
-    """
-    Columns Stage 01 takes from the aux file: present in aux, also in master, but NOT in the
-    load list (01 loads only listed master columns, then merges the full aux file).
-    Scoring must take these from aux too, or values differ from training
-    (e.g. cef_est_curr_mi_grp_imps differs between master and aux on ~34% of rows).
-    Usage: cols = aux_feature_columns(cfg, config_path, master_data.columns, aux_filtered.columns)
+    """Columns 01 takes from the aux file (in aux and master, not in the load list).
+
+    Scoring must take them from aux too - e.g. cef_est_curr_mi_grp_imps differs between the two files on ~34% of rows.
     """
     import pandas as pd
     join_key = cfg['data']['join_key']
@@ -110,12 +109,7 @@ def save_parquet(df, path, **kwargs):
 
 
 def downcast_frame(df, verbose=True):
-    """
-    Shrink numeric columns in place: all floats -> float32, integers -> smallest int type.
-    float32 keeps ~7 significant digits (max rel. error ~6e-8), sums are still done
-    in float64 by pandas/numpy. Text/bool/datetime columns are untouched.
-    Usage: data = downcast_frame(data)
-    """
+    """Floats -> float32 and ints -> smallest int type, in place. Text/bool/dates untouched."""
     import numpy as np
     import pandas as pd
     before = df.memory_usage(deep=False).sum()
@@ -139,22 +133,17 @@ def load_config(config_path: str) -> dict:
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    # Get machine-specific config
     machine_config = get_machine_config(config_path)
     config['machine'] = machine_config
     
-    # Merge machine-specific paths with common paths
-    # Machine-specific paths take precedence over common paths
+    # Machine paths override common paths
     if 'paths' in machine_config and 'paths' in config:
-        # Start with common paths
         merged_paths = config['paths'].copy()
-        # Override with machine-specific paths
         for key, value in machine_config['paths'].items():
             if value is not None:  # Only override if machine path is not null
                 merged_paths[key] = value
         config['paths'] = merged_paths
     elif 'paths' in machine_config:
-        # Only machine paths exist
         config['paths'] = machine_config['paths']
     
     return config
@@ -207,20 +196,9 @@ def combine_source_columns(cfg):
 
 
 def add_combined_columns(df, cfg, verbose=True):
-    """
-    Build combined target/exposure columns when config has experiment.combine (e.g. BI+PD).
-    No-op if the block is missing or the source columns are not all present.
+    """Build combined target/exposure when config has experiment.combine (e.g. BI+PD). No-op otherwise.
 
-    Config example:
-        target: pp_bi_pp_pd
-        exposure: ee_bi_imps_ee_pd_imps
-        combine:
-          target: [pp_bi, pp_pd]
-          exposure: [ee_bi_imps, ee_pd_imps]
-
-    exposure = max(ee_1, ee_2)
-    target   = (pp_1*ee_1 + pp_2*ee_2) / exposure  -> target*exposure = total loss
-    Rows with exposure 0 get target 0.
+    exposure = max(ee_1, ee_2), target = (pp_1*ee_1 + pp_2*ee_2) / exposure (0 when exposure is 0).
     """
     import numpy as np
     comb = cfg.get('experiment', {}).get('combine')

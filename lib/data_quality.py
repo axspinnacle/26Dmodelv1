@@ -1,8 +1,4 @@
-"""
-Data Quality Utilities
-
-Functions for analyzing data quality issues like duplicates, missing values, etc.
-"""
+"""Data quality helpers (duplicates, exposure floor)."""
 
 import pandas as pd
 import numpy as np
@@ -14,17 +10,7 @@ def analyze_duplicates(
     key_col: str,
     value_cols: Optional[List[str]] = None
 ) -> Dict:
-    """
-    Analyze duplicate rows based on a key column.
-    
-    Args:
-        df: DataFrame to analyze
-        key_col: Column name to check for duplicates
-        value_cols: Optional list of value columns to check consistency
-        
-    Returns:
-        Dictionary with duplicate analysis statistics
-    """
+    """Analyze duplicate rows based on a key column."""
     total_rows = len(df)
     unique_keys = df[key_col].nunique()
     
@@ -63,17 +49,7 @@ def check_duplicate_consistency(
     key_col: str,
     value_cols: List[str]
 ) -> Dict:
-    """
-    Check if duplicated keys have identical values across value columns.
-    
-    Args:
-        df: DataFrame to check
-        key_col: Key column that has duplicates
-        value_cols: Columns to check for consistency
-        
-    Returns:
-        Dictionary with consistency results per value column
-    """
+    """Check if duplicated keys have identical values across value columns."""
     # Get only rows with duplicated keys
     duplicated_mask = df.duplicated(subset=key_col, keep=False)
     duplicated_df = df[duplicated_mask]
@@ -119,17 +95,7 @@ def get_sample_duplicates(
     key_col: str,
     n_samples: int = 3
 ) -> pd.DataFrame:
-    """
-    Get sample rows showing duplicates.
-    
-    Args:
-        df: DataFrame
-        key_col: Key column with duplicates
-        n_samples: Number of duplicate keys to sample
-        
-    Returns:
-        DataFrame with sample duplicate rows
-    """
+    """Get sample rows showing duplicates."""
     # Find keys that have duplicates
     dup_counts = df.groupby(key_col).size()
     duplicated_keys = dup_counts[dup_counts > 1].index[:n_samples]
@@ -145,17 +111,7 @@ def summarize_duplicates(
     key_col: str,
     value_cols: Optional[List[str]] = None
 ) -> Dict:
-    """
-    Load a parquet file and analyze duplicates - convenience wrapper.
-    
-    Args:
-        file_path: Path to parquet file
-        key_col: Key column to check
-        value_cols: Optional value columns to check consistency
-        
-    Returns:
-        Analysis results dictionary
-    """
+    """Read a parquet file and run analyze_duplicates on it."""
     # Determine columns to load
     cols_to_load = [key_col]
     if value_cols:
@@ -173,18 +129,7 @@ def summarize_duplicates(
 
 
 def apply_exposure_floor(df, exposure_cols, floor_value, verbose=True):
-    """
-    Apply minimum floor to exposure columns.
-    
-    Args:
-        df: DataFrame
-        exposure_cols: List of exposure column names
-        floor_value: Minimum exposure value (e.g., 0.0833 for 1 month)
-        verbose: Print summary
-        
-    Returns:
-        DataFrame with floored exposures
-    """
+    """Apply minimum floor to exposure columns."""
     import pandas as pd
     
     df = df.copy()

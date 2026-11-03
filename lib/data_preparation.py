@@ -18,28 +18,10 @@ def prepare_model_data(
     exposure_floor=None,
     verbose=True
 ):
-    """
-    Load and prepare all data for model training with loss cap filtering.
-    This is the main orchestration function called from notebooks.
-    
-    Args:
-        output_base: Output directory path
-        target_col: Target column name (e.g., "pp_bi" or "pp_bi+pp_pd" for combined)
-        exposure_col: Exposure column name (e.g., "ee_bi_imps" or "ee_bi_imps+ee_pd_imps" for combined)
-        target_method: "residual" or "direct"
-        loss_cap: Loss cap value (None to skip)
-        exposure_floor: Minimum exposure value (e.g., 0.0833)
-        verbose: Print progress
-        
-    Returns:
-        dict with keys:
-            X_train, X_test: Feature matrices
-            y_train, y_test: Transformed targets
-            w_train, w_test: Weights (exposure)
-            pp_train, pp_test: Original PP (after cap)
-            glm_train, glm_test: GLM predictions (if residual method)
-            train_orig, test_orig: Original dataframes (filtered)
-            top_100_report: DataFrame with top 100 targets before cap
+    """Load 04c outputs, apply loss cap / exposure floor, join GLM and build model inputs.
+
+    Returns a dict: X_, y_ (transformed target), w_ (exposure), pp_ (capped PP), glm_, *_orig for train/test,
+    and top_100_report (largest targets before the cap).
     """
     from model_utils import transform_target, apply_loss_cap, generate_top_targets_report
     
@@ -60,7 +42,6 @@ def prepare_model_data(
     if verbose:
         print(f"  Loaded - Train: {len(train_orig):,}, Test: {len(test_orig):,}")
     
-    # Load GLM and apply loss cap (continued...)
     return _prepare_model_data_part2(
         X_train, X_test, train_orig, test_orig,
         output_base, target_col, exposure_col, target_method,
@@ -86,7 +67,6 @@ def _prepare_model_data_part2(
         glm_train_df = pd.read_parquet(f"{output_base}/data/04c_train_glm.parquet")
         glm_test_df = pd.read_parquet(f"{output_base}/data/04c_test_glm.parquet")
         
-        # Filter out NaN GLM predictions
         glm_train_orig = len(glm_train_df)
         glm_test_orig = len(glm_test_df)
         glm_train_df = glm_train_df[glm_train_df['glm_pred'].notna()]
@@ -99,7 +79,6 @@ def _prepare_model_data_part2(
             print(f"    Train: {glm_train_removed:,} ({100*glm_train_removed/glm_train_orig:.2f}%)")
             print(f"    Test: {glm_test_removed:,} ({100*glm_test_removed/glm_test_orig:.2f}%)")
         
-        # Use index intersection
         train_common_idx = X_train.index.intersection(glm_train_df.index)
         test_common_idx = X_test.index.intersection(glm_test_df.index)
         
@@ -117,14 +96,12 @@ def _prepare_model_data_part2(
         test_orig = test_orig.loc[test_common_idx]
         X_test = X_test.loc[test_common_idx]
         
-        # Extract GLM predictions
         glm_train = glm_train_df.loc[train_common_idx, 'glm_pred'].values
         glm_test = glm_test_df.loc[test_common_idx, 'glm_pred'].values
         
         if verbose:
             print(f"  GLM loaded: train={len(glm_train):,}, test={len(glm_test):,}")
     
-    # Continue with part 3...
     return _prepare_model_data_part3(
         X_train, X_test, train_orig, test_orig,
         glm_train, glm_test, glm_train_df, glm_test_df,
@@ -181,7 +158,6 @@ def _prepare_model_data_part3(
             verbose=verbose
         )
         
-        # Re-align all datasets
         X_train = X_train.loc[train_orig.index]
         X_test = X_test.loc[test_orig.index]
         if glm_train is not None:

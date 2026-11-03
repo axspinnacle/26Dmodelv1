@@ -1,9 +1,4 @@
-"""
-feature_encoder.py
-------------------
-Master feature encoding system that reads from master_feature_encoding.csv
-and applies per-column encoding strategies.
-"""
+"""Feature encoding from master_feature_encoding.csv (04c) and replaying it for scoring (08)."""
 
 import pandas as pd
 import numpy as np
@@ -14,13 +9,8 @@ from sklearn.preprocessing import OneHotEncoder
 
 
 def apply_master_encoding(train_df, test_df, config_path, min_frequency=0.01, min_count=50):
-    """
-    Apply encoding strategies from master_feature_encoding.csv
+    """Encode train/test per master_feature_encoding.csv. Returns (train, test, encoders, summary)."""
     
-    Returns: train_encoded, test_encoded, encoders, encoding_summary
-    """
-    
-    # Load master encoding CSV
     encoding_path = Path(config_path) / "config_generated" / "master_feature_encoding.csv"
     if not encoding_path.exists():
         raise FileNotFoundError(f"Master encoding file not found: {encoding_path}")
@@ -28,13 +18,11 @@ def apply_master_encoding(train_df, test_df, config_path, min_frequency=0.01, mi
     encoding_df = pd.read_csv(encoding_path)
     print(f"[OK] Loaded master encoding: {len(encoding_df)} columns")
     
-    # Initialize outputs
     train_parts = []
     test_parts = []
     encoders = {}
     summary_rows = []
     
-    # Process each column
     for _, row in encoding_df.iterrows():
         col = row['column_name']
         enc_type = row['encoding']
@@ -145,8 +133,7 @@ def _encode_one_hot(train_series, test_series, col_name, group_rare=False,
     train_series = train_series.copy()
     test_series = test_series.copy()
     
-    # Convert to string, handle NaN as __MISSING__
-    # Use object dtype to avoid ArrowStringArray issues
+    # Strings, NaN -> __MISSING__ (object dtype avoids ArrowStringArray issues)
     train_str = _to_category_str(train_series)
     test_str = _to_category_str(test_series)
     
@@ -178,7 +165,6 @@ def _encode_one_hot(train_series, test_series, col_name, group_rare=False,
         train_categories = set(train_str.unique())
         test_str = test_str.map(lambda x: x if x in train_categories else '__OTHER__')
     
-    # Fit OneHotEncoder on train
     train_categories = sorted(train_str.unique())
     if '__OTHER__' not in train_categories:
         train_categories.append('__OTHER__')
@@ -186,11 +172,10 @@ def _encode_one_hot(train_series, test_series, col_name, group_rare=False,
     encoder = OneHotEncoder(categories=[train_categories], 
                            sparse_output=False, handle_unknown='ignore')
     
-    # Transform - convert to numpy array first to avoid ArrowStringArray issues
+    # numpy first to avoid ArrowStringArray issues
     train_encoded = encoder.fit_transform(np.array(train_str).reshape(-1, 1))
     test_encoded = encoder.transform(np.array(test_str).reshape(-1, 1))
     
-    # Create DataFrame with proper column names
     feature_names = [f"{col_name}_{cat}" for cat in encoder.categories_[0]]
     train_df = pd.DataFrame(train_encoded, columns=feature_names, 
                            index=train_series.index, dtype='float32')
@@ -296,18 +281,15 @@ def save_encoders(encoders, encoding_summary, output_path):
     models_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
     
-    # Save encoders as pickle
     encoders_file = models_dir / "04c_encoders.pkl"
     with open(encoders_file, 'wb') as f:
         pickle.dump(encoders, f)
     print(f"[OK] Saved encoders: {encoders_file}")
     
-    # Save encoding summary as CSV
     summary_file = results_dir / "04c_encoding_summary.csv"
     encoding_summary.to_csv(summary_file, index=False)
     print(f"[OK] Saved encoding summary: {summary_file}")
     
-    # Save human-readable mapping as JSON
     mapping_file = models_dir / "04c_encoding_map.json"
     mapping_dict = {}
     for col, enc_obj in encoders.items():
@@ -355,13 +337,9 @@ def _master_rules(config_path):
 
 
 def apply_saved_encoders(data_df, encoders, encoding_summary, config_path=None):
-    """
-    Apply saved encoders to new data (e.g., holdout set), reproducing 04c exactly.
+    """Replay 04c encoding on new data (holdout).
 
-    binary / remap rules: taken from encoding_summary['encoding_rule'] (04c runs after
-    this fix) or, for older summaries, from config_path/config_generated/
-    master_feature_encoding.csv. Older summaries also record remap_2to4_then_ohe as
-    'one_hot'; the master file is used to detect those.
+    binary/remap rules come from the summary's encoding_rule, or from the master file for older runs.
     """
     encoded_parts = []
     rules = _master_rules(config_path)
@@ -410,10 +388,8 @@ def apply_saved_encoders(data_df, encoders, encoding_summary, config_path=None):
                 series = _remap_2to4(series, as_float=False)
                 fixed['remap_2to4_then_ohe'] += 1
             
-            # Convert to string, handle NaN
             series_str = _to_category_str(series)
             
-            # Apply category mapping if exists
             if enc_obj['category_map']:
                 series_str = series_str.map(
                     lambda x: enc_obj['category_map'].get(x, '__OTHER__')
@@ -424,7 +400,6 @@ def apply_saved_encoders(data_df, encoders, encoding_summary, config_path=None):
                     lambda x: x if x in train_cats else '__OTHER__'
                 )
             
-            # Transform - convert to numpy array first
             encoded_arr = enc_obj['encoder'].transform(np.array(series_str).reshape(-1, 1))
             encoded_df = pd.DataFrame(
                 encoded_arr, 

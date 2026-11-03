@@ -1,26 +1,5 @@
-"""
-encoding_strategies.py
-----------------------
-Reusable encoding functions for the XGBoost benchmarking pipeline.
-
-Provides four encoding strategies that operate on the same raw training data:
-
-    Type 1 – Ordinal (0-5)  : Keep original 0-5 integer levels unchanged.
-                               Non-0-5 features are passed through as-is.
-    Type 2 – Binary          : Collapse every 0-5 feature to 0 or 1 using the
-                               grouping rule {0,1,2}->0 | {3,4,5}->1.
-                               String categoricals are One-Hot Encoded.
-    Type 3 – Actuarial       : Per-column strategy from the actuary's docx
-                               (LevelMapping.docx, DH-Liab / pp_bi column).
-                               Strategies: ordered, binary_low_hi, binary_lo_high,
-                               ohe, h_map2to4, ohe_map2to4, group_ohe, drop.
-    Type 4 – Custom          : Map 2->4 transformation then binary grouping.
-                               For 0-5 features: remap level 2->4, then apply
-                               binary {0,1,4}->0 | {3,5}->1. Result: levels
-                               {0,1,3,4,5} only (no level 2). String features OHE.
-
-All encoders are fitted strictly on the TRAINING data and then applied to the
-test data to prevent leakage.
+"""Old encoding benchmark (ordinal / binary / actuarial / custom). Not used by the pipeline;
+00 EDA still imports a few helpers.
 """
 
 import os
@@ -30,11 +9,10 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
+# Paths
 PROJECT_ROOT  = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-# Default paths - can be overridden by passing data_root parameter to functions
-# These are kept for backward compatibility but should be set from config in practice
+# Default paths; functions take data_root to override
 TRAIN_PATH    = None  # Set dynamically from config or passed as parameter
 TEST_PATH     = None  # Set dynamically from config or passed as parameter
 MAPPING_CSV   = os.path.join(PROJECT_ROOT, "config", "level_mapping_reference.csv")
@@ -52,7 +30,7 @@ def set_data_paths(data_root: str):
 # Legacy config.json support - falls back to safe defaults if not found
 CONFIG_PATH   = os.path.join(PROJECT_ROOT, "config.json")
 
-# ── Load modeling config from config.json (legacy) or use defaults ────────────
+# Load modeling config from config.json (legacy) or use defaults
 def _load_config() -> dict:
     """Load config.json if it exists, otherwise return safe defaults."""
     if os.path.exists(CONFIG_PATH):
@@ -86,17 +64,7 @@ _ALL_TARGETS = {"pp_bi", "pp_pd", "pp_pip", "pp_coll", "pp_comp",
 
 
 def _load_exclusion_list() -> set:
-    """
-    Load manual column exclusions from config/column_exclusions.csv.
-    
-    This CSV is a MANUAL INPUT file (never auto-generated) that lists columns
-    to exclude from all encoding strategies due to high cardinality, being IDs,
-    join keys, duplicates, or other problematic characteristics.
-    
-    Returns
-    -------
-    set of column names to exclude
-    """
+    """Load manual column exclusions from config/column_exclusions.csv."""
     csv_path = os.path.join(PROJECT_ROOT, "config", "column_exclusions.csv")
     if os.path.exists(csv_path):
         try:
@@ -113,19 +81,7 @@ def _load_exclusion_list() -> set:
 
 
 def _load_inclusion_list() -> set:
-    """
-    Load FEATURE WHITELIST from config/columns_inclusion.csv.
-    
-    If this file exists, ONLY features listed will be used in training.
-    This allows iterative feature testing to isolate data leakage sources.
-    
-    To disable: rename file to columns_inclusion.csv.disabled
-    To enable: rename back to columns_inclusion.csv
-    
-    Returns
-    -------
-    set of column names to include (None if file doesn't exist = use all)
-    """
+    """Feature whitelist from config/columns_inclusion.csv, or None if the file is missing (= use all)."""
     csv_path = os.path.join(PROJECT_ROOT, "config", "columns_inclusion.csv")
     if os.path.exists(csv_path):
         try:
@@ -146,9 +102,7 @@ def _load_inclusion_list() -> set:
 EXCLUDE_ALWAYS = list(_ALL_TARGETS | _load_exclusion_list())
 
 
-# ============================================================================
-# 1. Data Loading
-# ============================================================================
+# 1. data loading
 
 def _optimize():
     """Lazy import of optimize_dtypes to avoid circular dependency at module level."""
@@ -276,9 +230,7 @@ def get_y(df: pd.DataFrame) -> pd.Series:
     return y
 
 
-# ============================================================================
-# 2. Feature catalogue helpers
-# ============================================================================
+# 2. feature catalogue helpers
 
 def _load_mapping() -> pd.DataFrame:
     """Load the level mapping reference CSV."""
@@ -308,24 +260,7 @@ def _is_0_5_col(s: pd.Series) -> bool:
 
 
 def _fix_numeric_object_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Convert object columns that should be numeric to numeric dtype.
-    
-    Handles columns like 'model_year_raw', 'pol_tenure_cal' that contain
-    numbers as strings mixed with special values like 'Unknown', 'None'.
-    
-    Special values are converted to NaN (XGBoost handles missing values natively).
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Raw data with mixed dtypes
-    
-    Returns
-    -------
-    pd.DataFrame
-        Data with corrected dtypes
-    """
+    """Text columns holding numbers -> numeric; values like 'Unknown' become NaN."""
     # Comprehensive list of numeric columns stored as objects
     numeric_candidates = [
         # Policy/ownership duration
@@ -387,26 +322,7 @@ def _fix_numeric_object_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def scan_parquet_schema_for_leakage(parquet_path: str = None,
                                      leakage_patterns: list = None) -> dict:
-    """
-    FAST schema-only scan - reads column names from parquet metadata (no data loaded!).
-    
-    Use this BEFORE load_train_only() to proactively identify leakers.
-    Ultra-fast (~100ms vs 30+ seconds for full data load).
-    
-    Parameters
-    ----------
-    parquet_path : str, optional
-        Path to parquet file. Defaults to TRAIN_PATH.
-    leakage_patterns : list, optional
-        Patterns to check. Defaults to common leakage sources.
-    
-    Returns
-    -------
-    dict with:
-        - all_cols: all column names in schema
-        - leakers: columns matching patterns but not in EXCLUDE_ALWAYS
-        - csv_rows: ready-to-paste CSV rows for column_exclusions.csv
-    """
+    """Leakage scan on the parquet schema only (no data read)."""
     import pyarrow.parquet as pq
     
     if parquet_path is None:
@@ -418,7 +334,7 @@ def scan_parquet_schema_for_leakage(parquet_path: str = None,
             'loss', 'paid', 'reserve', 'premium'
         ]
     
-    # REFRESH exclusions (re-read CSV to pick up new additions)
+    # Re-read the CSV to pick up new exclusions
     current_exclusions = list(_ALL_TARGETS | _load_exclusion_list())
     
     # Read schema only (FAST - no data loaded!)
@@ -482,29 +398,7 @@ def scan_parquet_schema_for_leakage(parquet_path: str = None,
 
 def scan_for_leakage_features(df: pd.DataFrame, 
                                leakage_patterns: list = None) -> dict:
-    """
-    Scan dataset for potential data leakage features at start of every run.
-    
-    Checks for columns starting with suspicious patterns that could reveal
-    claim occurrence or amounts (e.g., claim_count*, incloss*, incurred*).
-    
-    Note: Target columns (pp_bi, ee_bi, etc.) are already in EXCLUDE_ALWAYS
-    via _ALL_TARGETS, so they won't be flagged as leakers.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Raw data to scan
-    leakage_patterns : list, optional
-        Custom patterns to check. Default covers common leakage sources.
-    
-    Returns
-    -------
-    dict with keys:
-        - found: list of (column, pattern) tuples for all matches
-        - leakers: list of columns that match patterns but aren't excluded
-        - by_pattern: dict grouping columns by matched pattern
-    """
+    """Scan dataset for potential data leakage features at start of every run."""
     if leakage_patterns is None:
         # PRIMARY patterns (almost always leakage)
         leakage_patterns = [
@@ -566,26 +460,7 @@ def scan_for_leakage_features(df: pd.DataFrame,
 
 def _check_cardinality_safety(col_name: str, series: pd.Series, 
                                max_unique: int = 100) -> bool:
-    """
-    Check if a column is safe for One-Hot Encoding.
-    
-    Columns with >max_unique values create massive sparse matrices on large datasets
-    (e.g., 1.28M rows × 500 categories = 640M cells) that can freeze/crash the kernel.
-    
-    Parameters
-    ----------
-    col_name : str
-        Name of the column being checked
-    series : pd.Series
-        The column data to check
-    max_unique : int, default 100
-        Maximum number of unique values allowed for OHE
-    
-    Returns
-    -------
-    bool
-        True if safe to encode (n_unique <= max_unique), False otherwise
-    """
+    """Check if a column is safe for One-Hot Encoding."""
     n_unique = series.nunique()
     if n_unique > max_unique:
         sample_vals = list(series.dropna().unique()[:5])
@@ -597,9 +472,7 @@ def _check_cardinality_safety(col_name: str, series: pd.Series,
     return True
 
 
-# ============================================================================
-# 3. Low-level encoders
-# ============================================================================
+# 3. low-level encoders
 
 def _apply_binary_map(s: pd.Series, low_set: set, high_set: set,
                       fill_unknown: int = 0) -> pd.Series:
@@ -637,9 +510,7 @@ def _transform_ohe(col: str, s: pd.Series, enc: OneHotEncoder) -> pd.DataFrame:
     return pd.DataFrame(ohe_arr, columns=cols, index=s.index)
 
 
-# ============================================================================
-# 4. Encoding strategy functions
-# ============================================================================
+# 4. encoding strategy functions
 
 def encode_type1_ordinal(train: pd.DataFrame, test: pd.DataFrame = None):
     """Type 1: Keep numeric ordinal, OHE objects. Usage: X_tr, X_te, names, enc = encode_type1_ordinal(train, test)"""

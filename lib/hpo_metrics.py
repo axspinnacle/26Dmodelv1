@@ -1,38 +1,13 @@
-"""
-HPO Metrics for Actuarial Model Optimization
-
-Functions for calculating fit quality, model power, and combined lift optimization score.
-Based on actuarial best practices for hyperparameter optimization.
-"""
+"""HPO metrics: fit quality, model power and the combined lift score."""
 
 import numpy as np
 import pandas as pd
 
 
 def calculate_model_metrics(data, weight_name, bins=10):
-    """
-    Calculate fit_quality and model_power from model predictions.
-    
-    Parameters
-    ----------
-    data : pd.DataFrame
-        Must contain: 'pred', 'act_weighted', weight_name
-    weight_name : str
-        Column name for exposure/weights
-    bins : int
-        Number of deciles (typically 10)
-    
-    Returns
-    -------
-    tuple
-        (fit_quality, model_power)
-        
-    Notes
-    -----
-    - fit_quality: 1 - weighted average of |pred/act - 1| across deciles
-                   Range: 0-1 (can be negative if very poor)
-    - model_power: Weighted average of |pred/overall_mean - 1| across deciles
-                   Range: 0-unbounded (higher = more separation)
+    """Decile fit_quality and model_power.
+
+    fit_quality = 1 - weighted mean |pred/act - 1|; model_power = weighted mean |pred/mean - 1|.
     """
     test_data = data.copy()
     
@@ -193,23 +168,7 @@ def evaluate_split(model, X, y, w, glm, target_method, bins=10, iteration_range=
 
 
 def compute_fit_quality(y_true, y_pred, weights):
-    """
-    Compute fit quality from raw arrays (simpler interface for notebooks).
-    
-    Parameters
-    ----------
-    y_true : array-like
-        Actual target values
-    y_pred : array-like
-        Predicted values
-    weights : array-like
-        Sample weights (exposure)
-    
-    Returns
-    -------
-    float
-        Fit quality score (0-1, higher is better)
-    """
+    """Fit quality from arrays (0-1, higher is better)."""
     # Create dataframe for calculate_model_metrics
     df = pd.DataFrame({
         'act_weighted': y_true * weights,
@@ -223,23 +182,7 @@ def compute_fit_quality(y_true, y_pred, weights):
 
 
 def compute_model_power(y_true, y_pred, weights):
-    """
-    Compute model power from raw arrays (simpler interface for notebooks).
-    
-    Parameters
-    ----------
-    y_true : array-like
-        Actual target values
-    y_pred : array-like
-        Predicted values
-    weights : array-like
-        Sample weights (exposure)
-    
-    Returns
-    -------
-    float
-        Model power score (0+, higher is better)
-    """
+    """Model power from arrays (higher = more separation)."""
     # Create dataframe for calculate_model_metrics
     df = pd.DataFrame({
         'act_weighted': y_true * weights,

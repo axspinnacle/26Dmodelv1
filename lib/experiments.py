@@ -1,15 +1,7 @@
-"""
-Feature ablation experiments: one change vs a reference version, judged against seed noise.
+"""One-change experiments against a reference version, judged against seed noise.
 
-An experiment = config/{model}/{name} copied from a reference version (e.g. v3) with ONE change
-(feature rule or random_state). It reuses the reference 04b train/test files (symlinks), so only
-04c -> 05c run (~20 min). Holdout (08) is not run; compare test gini (same rows for all runs).
-
-Usage (setup_notebooks/run_experiments.ipynb):
-    create_experiment(root, 'car_coll', 'x_seed7', ref_version='v3', random_state=7)
-    create_experiment(root, 'car_coll', 'x_noraw', ref_version='v3', drop_raw_with_imputed=True)
-    run_experiment(root, 'car_coll', 'x_seed7')
-    compare_experiments(root, 'car_coll', ['v3', 'x_seed7', 'x_noraw'], ref='v3')
+An experiment reuses the reference 04b data, so only 04c-05c run. Compare test gini.
+See setup_notebooks/run_experiments.ipynb.
 """
 
 import re
@@ -46,16 +38,7 @@ def _output_dir(project_root, config_file):
 
 def create_experiment(project_root, model, name, ref_version='v3', random_state=None,
                       drop_raw_with_imputed=False, skip=(), group_ohe=None, overwrite=False):
-    """
-    Create config/{model}/{name} = ref_version + one change, and link the ref 04b data.
-
-    Args:
-        name: experiment version name, e.g. 'x_seed7' (also the output folder name)
-        random_state: new xgboost seed (None = keep ref seed)
-        drop_raw_with_imputed / skip / group_ohe: feature rules (see apply_feature_rules)
-    Returns:
-        output folder path
-    """
+    """config/{model}/{name} = ref_version + one change (seed or feature rule), linked to the ref 04b data."""
     project_root = Path(project_root)
     ref = project_root / 'config' / model / ref_version
     dst = project_root / 'config' / model / name
@@ -129,12 +112,9 @@ def _test_predictions(project_root, model, version):
 
 
 def compare_experiments(project_root, model, versions, ref='v3', n_boot=40, seed=0):
-    """
-    Test gini per version + paired bootstrap of (version - ref) on the same test rows.
+    """Test gini per version and a paired bootstrap of (version - ref) on the same test rows.
 
-    Read: |diff_vs_ref| within the seed runs' spread = noise; boot_lo..boot_hi excluding 0 means
-    the difference is not test-sample luck (it can still be seed noise - compare with seed runs).
-    Returns DataFrame: version, n_features, test_gini, diff_vs_ref, boot_lo, boot_hi
+    A diff inside the seed runs spread is noise.
     """
     from gini_utils import gini
 

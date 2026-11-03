@@ -1,15 +1,8 @@
-"""
-Build a new config version (e.g. v3) from an existing one (e.g. v1) where every feature
-enabled in master_feature_encoding.csv actually reaches the model.
+"""Build config versions.
 
-Rules:
-- Source load list rows are kept unchanged (target, exposure, fold, Dep_factor, ...).
-- Leakage columns (LEAKAGE_PREFIXES) are set to skip in the encoding and never added to the load list.
-- Enabled encoding columns found in the master file are appended to the load list
-  (columns in the aux file are skipped - aux is always merged in full).
-- String columns with a numeric-type encoding:
-    mostly numeric values -> added to type_conversions.csv
-    text categories       -> one_hot_encode if few levels, else skip
+build_full_feature_version: every feature enabled in the encoding file gets loaded (v3).
+copy_version: copy a version with columns set to skip and an imputation section (v4).
+Leakage columns (LEAKAGE_PREFIXES) are never loaded.
 """
 
 import re
@@ -107,18 +100,10 @@ def _aux_columns(cfg, src):
 
 def build_full_feature_version(project_root, model, src_version='v1', dst_version='v3',
                                aux_columns=None, max_ohe_levels=10, overwrite=False, verbose=True):
-    """
-    Create config/{model}/{dst_version} from config/{model}/{src_version} with all enabled features loaded.
+    """Create config/{model}/{dst} from {src} with every enabled feature loaded.
 
-    Args:
-        project_root: Project root path
-        model: Model folder name (e.g. 'car_coll')
-        aux_columns: Aux column names; default = aux file schema or all_columns_aux.csv
-                     (fallback: car aux schema - aux files share the same columns)
-        max_ohe_levels: Text-category columns with <= this many levels become one_hot_encode, else skip
-        overwrite: Replace existing dst folder
-    Returns:
-        dict summary
+    Text columns that hold numbers get a type conversion; text categories become one-hot if they have
+    at most max_ohe_levels levels, else skip. Best params are copied from the source.
     """
     from utils import load_config
 
@@ -211,17 +196,9 @@ IMPUTED_SUFFIXES = ('_imps', '_impa', '_impm', '_imp')
 def apply_feature_rules(project_root, model, version, base_version='v1',
                         drop_raw_with_imputed=True, skip=(), group_ohe=None,
                         to_numeric=(), aux_columns=None, verbose=True):
-    """
-    Edit config/{model}/{version} feature choices in master_feature_encoding.csv, then
-    rebuild the load list (base_version rows unchanged + enabled master columns).
+    """Edit encoding choices in config/{model}/{version} and rebuild its load list from base_version.
 
-    Args:
-        drop_raw_with_imputed: skip every enabled X_raw that has an enabled X_imps/_impa/_impm/_imp
-        skip: columns to set to 'skip'
-        group_ohe: {column: min_frequency} -> 'group_then_ohe:<freq>' (rare levels -> __OTHER__)
-        to_numeric: columns to encode as 'numeric' (text columns get a type conversion)
-    Returns:
-        dict summary
+    drop_raw_with_imputed skips X_raw when X_imps/_impa/_impm/_imp is enabled. group_ohe = {col: min_freq}.
     """
     from utils import load_config
 
@@ -283,6 +260,145 @@ def apply_feature_rules(project_root, model, version, base_version='v1',
         print(f"{model}: {len(raw_skip)} raw->skip, skip={sorted(skip)}, numeric={list(to_numeric)}, "
               f"group={dict(group_ohe or {})}, enabled={len(enabled_df)}, load rows={summary['load_rows']}")
     return summary
+
+
+IMPUTATION_V4 = {
+    'defaults_file': 'config/Default_values_AME_MAM.csv',
+    'state_column': 'st_raw',
+    'columns': {'amc_annual_mileage_estimate_raw': 'AME_median',
+                'amc_modeled_annual_mileage_raw': 'MAM_median'},
+    'add_missing_flag': False,
+}
+
+
+def _imputation_block(imp):
+    """YAML text for the config 'imputation' section, with comments."""
+    cols = ''.join(f'    {c}: {s}\n' for c, s in imp['columns'].items())
+    return ('\n# Fill missing values from a state x vehicle_type table (stage 02 and 08 scoring).\n'
+            '# Only NaN is filled. add_missing_flag adds {column}_missing_ind (1 = was missing).\n'
+            'imputation:\n'
+            f"  defaults_file: \"{imp['defaults_file']}\"\n"
+            f"  state_column: {imp['state_column']}\n"
+            f'  columns:\n{cols}'
+            f"  add_missing_flag: {str(imp['add_missing_flag']).lower()}\n")
+
+
+def copy_version(project_root, model, src_version='v3', dst_version='v4', skip=(),
+                 imputation=None, overwrite=False, verbose=True):
+    """Copy config/{model}/{src} to {dst}, set `skip` columns to skip (source=manual),
+    drop them from the load list, and add the 'imputation' config section.
+
+    If imputation has add_missing_flag, a numeric encoding row for each {column}_missing_ind is added.
+    """
+    project_root = Path(project_root)
+    src = project_root / 'config' / model / src_version
+    dst = project_root / 'config' / model / dst_version
+    if dst.exists():
+        if not overwrite:
+            raise FileExistsError(f"{dst} exists (use overwrite=True)")
+        shutil.rmtree(dst)
+    for f in VERSION_FILES + ['05b_best_params.yaml']:
+        (dst / f).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src / f, dst / f)
+
+    # config.yaml: names/paths -> dst, 05b off, imputation section
+    cfg_file = dst / 'config.yaml'
+    text = cfg_file.read_text()
+    text = re.sub(rf'^(\s*name:\s*"?[^"\n#]*?)_{src_version}("?)', rf'\1_{dst_version}\2', text, count=1, flags=re.M)
+    text = re.sub(rf'(description:[^\n]*?)\b{src_version}\b', rf'\1{dst_version}', text, count=1)
+    text = re.sub(rf'/{model}/{src_version}(?=["\s]|$)', f'/{model}/{dst_version}', text, flags=re.M)
+    text = re.sub(r'^(\s*stage_05b:\s*)\w+', r'\1false', text, flags=re.M)
+    if imputation:
+        if re.search(r'^imputation:', text, flags=re.M):
+            raise ValueError(f'{model}: config already has an imputation section')
+        text = text.rstrip('\n') + '\n' + _imputation_block(imputation)
+    cfg_file.write_text(text)
+
+    # Encoding: skip rows -> skip/manual, plus optional flag rows
+    enc_eol = _eol(dst / ENC_FILE)
+    enc = pd.read_csv(dst / ENC_FILE, dtype=str, keep_default_na=False)
+    missing = [c for c in skip if c not in set(enc['column_name'])]
+    if missing:
+        raise ValueError(f"{model}: not in encoding file: {missing}")
+    enc.loc[enc['column_name'].isin(skip), ['encoding', 'source']] = ['skip', 'manual']
+    flags = []
+    if imputation and imputation.get('add_missing_flag'):
+        flags = [f'{c}_missing_ind' for c in imputation['columns'] if f'{c}_missing_ind' not in set(enc['column_name'])]
+        blank = {k: '' for k in enc.columns}
+        enc = pd.concat([enc, pd.DataFrame([{**blank, 'column_name': f, 'encoding': 'numeric',
+                                             'source': 'manual'} for f in flags])], ignore_index=True)
+    enc.to_csv(dst / ENC_FILE, index=False, lineterminator=enc_eol)
+
+    # Load list: drop skipped columns, every other line unchanged
+    load_eol = _eol(dst / LOAD_FILE)
+    lines = (dst / LOAD_FILE).read_bytes().decode().rstrip('\r\n').split(load_eol)
+    kept = [l for l in lines if l.split(',', 1)[0].strip() not in set(skip)]
+    (dst / LOAD_FILE).write_bytes((load_eol.join(kept) + load_eol).encode())
+
+    # Type conversions of skipped columns are not needed
+    tc_eol = _eol(dst / 'type_conversions.csv')
+    tc = pd.read_csv(dst / 'type_conversions.csv', dtype=str, keep_default_na=False)
+    tc[~tc['column_name'].isin(skip)].to_csv(dst / 'type_conversions.csv', index=False, lineterminator=tc_eol)
+
+    summary = {'model': model, 'skipped': len(skip), 'load_rows_removed': len(lines) - len(kept),
+               'flags_added': flags}
+    if verbose:
+        print(f"{model}: {src_version} -> {dst_version}, {len(skip)} skip, "
+              f"{len(lines) - len(kept)} load rows removed, flags={flags or 'none'}")
+    return summary
+
+
+def check_copied_version(project_root, model, src_version='v3', dst_version='v4', skip=()):
+    """Check a copy_version result against its source. Returns list of problems (empty = OK)."""
+    project_root = Path(project_root)
+    src = project_root / 'config' / model / src_version
+    dst = project_root / 'config' / model / dst_version
+    problems = []
+    cfg = yaml.safe_load((dst / 'config.yaml').read_text())
+    if not str(cfg['experiment']['name']).endswith(f'_{dst_version}'):
+        problems.append(f"name={cfg['experiment']['name']}")
+    if cfg['execution']['stages'].get('stage_05b'):
+        problems.append('stage_05b on')
+    for pc, m in cfg['machines'].items():
+        op = (m.get('paths') or {}).get('output_path')
+        if op and not op.rstrip('/').endswith(f'{model}/{dst_version}'):
+            problems.append(f'{pc} output_path={op}')
+
+    load = set(pd.read_csv(dst / LOAD_FILE, comment='#')['column_name'])
+    imp = cfg.get('imputation') or {}
+    if imp:
+        if not (project_root / imp['defaults_file']).exists():
+            problems.append(f"defaults_file missing: {imp['defaults_file']}")
+        need = [c for c in [imp.get('state_column', 'st_raw'), *imp['columns']] if c not in load]
+        if need:
+            problems.append(f'imputation columns not loaded: {need}')
+
+    # Only the skip rows (and flag rows) differ from the source encoding
+    a = pd.read_csv(src / ENC_FILE, dtype=str, keep_default_na=False).set_index('column_name')
+    b = pd.read_csv(dst / ENC_FILE, dtype=str, keep_default_na=False).set_index('column_name')
+    changed = sorted(c for c in a.index if not a.loc[c].equals(b.loc[c]))
+    if changed != sorted(skip):
+        problems.append(f'encoding changes differ from skip list: {sorted(set(changed) ^ set(skip))}')
+    rows = b.loc[list(skip)]
+    if not ((rows['encoding'] == 'skip') & (rows['source'] == 'manual')).all():
+        problems.append('skip rows not skip/manual')
+    if load & set(skip):
+        problems.append(f'skipped still loaded: {sorted(load & set(skip))}')
+
+    # Load list = source minus skipped
+    la_ = [l for l in (src / LOAD_FILE).read_text().splitlines() if l.strip()]
+    lb = [l for l in (dst / LOAD_FILE).read_text().splitlines() if l.strip()]
+    if lb != [l for l in la_ if l.split(',', 1)[0].strip() not in set(skip)]:
+        problems.append('load list is not source minus skip')
+
+    for f in ['pca_features.csv', 'exclusion.csv', 'monotonicity.csv', '05b_best_params.yaml']:
+        if (src / f).read_bytes() != (dst / f).read_bytes():
+            problems.append(f'{f} differs')
+    expected = set(VERSION_FILES) | {'05b_best_params.yaml'}
+    actual = {str(p.relative_to(dst)) for p in dst.rglob('*') if p.is_file()}
+    if actual != expected:
+        problems.append(f'files: extra={sorted(actual - expected)} missing={sorted(expected - actual)}')
+    return problems
 
 
 def check_full_feature_version(project_root, model, src_version='v1', dst_version='v3', aux_columns=None,

@@ -7,25 +7,7 @@ import os
 
 
 def analyze_column(col_name, col_data, skip_patterns=None, target_exposure=None):
-    """
-    Analyze a single column and recommend encoding strategy.
-    
-    Parameters
-    ----------
-    col_name : str
-        Column name
-    col_data : pd.Series
-        Column data
-    skip_patterns : list, optional
-        Patterns to skip (identifiers)
-    target_exposure : set, optional
-        Target/exposure column names to skip
-    
-    Returns
-    -------
-    dict
-        Analysis result with encoding recommendation
-    """
+    """Analyze a single column and recommend encoding strategy."""
     if skip_patterns is None:
         skip_patterns = ['vin', 'policyid', 'reference_num', 'companyid', '__index_level']
     if target_exposure is None:

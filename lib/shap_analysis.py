@@ -1,12 +1,6 @@
-"""
-Stage 07a/07b SHAP analysis: loading, importance tables, per-feature plots.
+"""07a/07b SHAP analysis: loading, importance tables, beeswarms and per-feature plots.
 
-07a (summary): importance per model feature and per original column (one-hot levels summed
-               per record), train vs test, zero-SHAP features, coverage, beeswarms.
-07b (feature plots): residual + SHAP range plots for the top N features, saved to plots/07b/.
-
-All SHAP rows are aligned to the rows the model was trained/evaluated on (05c predictions),
-weighted by exposure. Usage: see templates/07a_shap_summary.ipynb and 07b_shap_feature_plots.ipynb.
+SHAP rows are limited to the rows the model used (05c predictions) and weighted by exposure.
 """
 
 import re
@@ -25,15 +19,9 @@ def shap_feature_columns(shap_df):
 
 
 def load_shap_data(output_base, dataset, features=None, with_values=True):
-    """
-    Load SHAP values (+ encoded feature values) for 'train' or 'test', restricted to rows
-    present in 05c predictions (rows the model used), with exposure as 'weight'.
+    """SHAP values for 'train' or 'test' on the rows the model used, with exposure as 'weight'.
 
-    Args:
-        features: subset of feature columns to load (None = all)
-        with_values: also load encoded feature values (04c) and actual/pred
-    Returns:
-        shap_df (SHAP + 'weight'), data_df (features + actual, pred, weight) or None
+    with_values=True also returns the encoded feature values plus actual/pred. Returns (shap_df, data_df or None).
     """
     out = Path(output_base)
     shap_file = out / 'results' / f'06_shap_{dataset}.parquet'
@@ -64,13 +52,8 @@ def load_shap_data(output_base, dataset, features=None, with_values=True):
 
 
 def shap_stats(shap_df, weight_col='weight'):
-    """
-    Per-column SHAP statistics (one row per SHAP column):
-      mean_abs_shap             exposure-weighted mean |SHAP| per record  (importance)
-      mean_abs_shap_unweighted  plain mean |SHAP| per record
-      mean_shap                 exposure-weighted mean signed SHAP
-      share_nonzero             exposure share of records with SHAP != 0
-      n_rows, exposure
+    """Per-column SHAP stats: exposure-weighted mean |SHAP| (importance), unweighted mean |SHAP|,
+    mean SHAP, exposure share with SHAP != 0, rows and exposure.
     """
     feat = shap_feature_columns(shap_df)
     w = shap_df[weight_col].to_numpy(dtype='float64')
@@ -110,11 +93,7 @@ def encoding_type_map(encoding_summary):
 
 
 def column_shap(shap_df, source_map, weight_col='weight'):
-    """
-    Record-level SHAP per ORIGINAL column: one-hot levels are summed within each record
-    (SHAP is additive, so the sum is that record's total effect of the column).
-    Single-column features are copied unchanged. Returns DataFrame (+ weight column).
-    """
+    """SHAP per original column: one-hot levels summed within each record (SHAP is additive)."""
     feat = shap_feature_columns(shap_df)
     groups = {}
     for c in feat:
@@ -158,12 +137,7 @@ def _ordered(df, lead):
 
 
 def importance_table(stats_train, stats_test, source_map=None, enc_map=None):
-    """
-    Feature (model column) importance, ranked by test importance.
-    Args: stats_* from shap_stats(); source_map from feature_source_map(); enc_map from encoding_type_map().
-    Key columns used downstream: feature, test_mean_abs_shap, test_pct, test_cum_pct, test_rank,
-    train_pct, train_rank.
-    """
+    """Model feature importance for train and test, ranked by test importance."""
     df = _rank_table(stats_test, stats_train, 'feature')
     df['source_column'] = df['feature'].map(source_map or {}).fillna(df['feature'])
     df['encoding_type'] = df['source_column'].map(enc_map or {}).fillna('')
@@ -190,7 +164,7 @@ def coverage_counts(table, levels=(50, 80, 90, 95, 99)):
     return {f'{p}pct': int(np.searchsorted(cum, p) + 1) for p in levels}
 
 
-# ---------------------------------------------------------------- 07a charts
+# 07a charts
 
 def _save(fig, path):
     fig.tight_layout()
@@ -235,16 +209,9 @@ def plot_cumulative_importance(table, coverage, path):
 
 
 def plot_beeswarm(shap_df, values_df, order, title, path, max_rows=50000, grey_columns=(), seed=0):
-    """
-    SHAP beeswarm with a FIXED row order (same as the matching importance chart).
+    """Beeswarm in a fixed row order (same as its bar chart).
 
-    Args:
-        shap_df: SHAP per record (+ 'weight'), columns include `order`
-        values_df: feature values per record (same index); columns in grey_columns may be absent
-        order: columns to plot, top to bottom (e.g. top 40 by test importance)
-        max_rows: dots per row; records drawn with probability proportional to exposure,
-                  so dot density reflects exposure like the (exposure-weighted) bar chart
-        grey_columns: columns without a numeric value (one-hot groups) -> plotted grey
+    max_rows dots per row, sampled in proportion to exposure. grey_columns (one-hot groups) have no value colour.
     """
     import shap
     w = shap_df['weight'].to_numpy(dtype='float64')
@@ -289,7 +256,7 @@ def plot_train_vs_test(table, top_n, path, label_col='feature'):
 
 
 
-# ---------------------------------------------------------------- 07b feature plots
+# 07b feature plots
 
 def safe_name(name):
     """File-system safe version of a feature name (spaces, slashes, etc. -> '_')."""
@@ -311,16 +278,9 @@ def _residual_table(tab, feature, rank, dataset):
 
 
 def make_feature_plots(features, frames, plots_dir, resid_cfg=None, range_cfg=None):
-    """
-    Residual + SHAP range plots for each feature and dataset.
+    """Residual and SHAP range plots per feature and dataset.
 
-    Args:
-        features: feature names in rank order (rank = position + 1)
-        frames: {'train': (shap_df, data_df), 'test': (shap_df, data_df)}
-    Returns:
-        plots    DataFrame[rank, feature, dataset, kind, path]
-        tables   residual tables DataFrame[rank, feature, dataset, bin, weight, act_rate, pred_rate]
-        failures DataFrame[rank, feature, dataset, kind, error]
+    frames = {'train': (shap_df, data_df), 'test': (...)}. Returns (plots, residual tables, failures).
     """
     from shap_utils import create_residual_plot, create_shap_range_plot
     resid_cfg = {**(resid_cfg or {}), 'print_table': False}   # tables go to CSV, not the notebook

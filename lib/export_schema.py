@@ -1,9 +1,4 @@
-"""
-Export parquet file schema to CSV
-
-Usage:
-    python lib/export_schema.py <parquet_file> <output_csv>
-"""
+"""Write a parquet schema to CSV: python lib/export_schema.py <parquet> <csv>"""
 
 import pandas as pd
 import pyarrow.parquet as pq

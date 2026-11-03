@@ -6,20 +6,7 @@ import xgboost as xgb
 
 
 def validate_features_match(model, data, data_name="data"):
-    """
-    Validate that data features match model expectations.
-    
-    Args:
-        model: XGBRegressor or XGBClassifier model
-        data: pd.DataFrame with features
-        data_name: str, name for error messages
-    
-    Returns:
-        bool: True if valid
-        
-    Raises:
-        ValueError: If features don't match, with detailed message
-    """
+    """Validate that data features match model expectations."""
     # Get model's expected features
     booster = model.get_booster()
     model_num_features = booster.num_features()
@@ -95,17 +82,7 @@ def validate_features_match(model, data, data_name="data"):
 
 
 def validate_predictions(predictions, data, check_range=True):
-    """
-    Validate model predictions are sensible.
-    
-    Args:
-        predictions: array-like predictions
-        data: pd.DataFrame, original data
-        check_range: bool, check if predictions are in reasonable range
-    
-    Returns:
-        bool: True if valid
-    """
+    """Validate model predictions are sensible."""
     import numpy as np
     
     print(f"\n* Prediction Validation:")

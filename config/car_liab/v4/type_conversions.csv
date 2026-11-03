@@ -1,0 +1,16 @@
+column_name,source_dtype,target_dtype,notes
+NumMajViol_raw,object,numeric,Major violations count (0-3)
+NumMajinAcc_raw,object,numeric,Major accidents count (0-1)
+NumMinAcc_raw,object,numeric,Minor accidents count (0-2)
+NumMinViol_raw,object,numeric,Minor violations count (0-3)
+NumSpdViol_raw,object,numeric,Speed violations count (0-1)
+late_payments_raw,object,numeric,Late payments count
+dml_year_raw,object,numeric,v3 auto
+amc_annual_mileage_estimate_raw,object,numeric,v3 auto
+amc_modeled_annual_mileage_raw,object,numeric,v3 auto
+cef_est_curr_mi_grp_raw,object,numeric,v3 auto
+vc_cylinders_raw,object,numeric,v3 auto
+vc_displacement_raw,object,numeric,v3 auto
+vc_engine_valves_raw,object,numeric,v3 auto
+vc_torque_raw,object,numeric,v3 auto
+vc_towing_capacity_raw,object,numeric,v3 auto

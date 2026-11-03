@@ -1,9 +1,4 @@
-"""
-Refactored SHAP utility functions - no global variables!
-
-Clean, reusable functions for SHAP analysis that explicitly
-pass data and return results instead of using globals.
-"""
+"""SHAP plotting helpers."""
 
 import pandas as pd
 import numpy as np
@@ -15,25 +10,19 @@ def compute_shap_aggregate(shap_df, weight_col='weight'):
     """Aggregate SHAP values by feature (weighted). Usage: shagg, shagg_num, shagg2 = compute_shap_aggregate(shap_df)"""
     fc_df2 = shap_df.copy()
     
-    # Get all columns except weight and base_value
     cols = [i for i in fc_df2.columns if i not in [weight_col, 'base_value']]
     
-    # Weight absolute SHAP values
     for i in cols:
         fc_df2[i] = np.abs(fc_df2[i]) * fc_df2[weight_col]
     
-    # Aggregate
     shagg = fc_df2[cols].sum().reset_index()
     shagg.columns = ['field', 'total_shap']
     
-    # Sort by importance
     shagg = shagg.sort_values(by='total_shap', ascending=False)
     
-    # Filter to non-zero
     shagg2 = shagg.loc[shagg['total_shap'] > 0].copy()
     shagg_num = shagg.loc[shagg['total_shap'] > 0].copy()
     
-    # Add cumulative stats
     shagg_num['cum_shap_abs'] = shagg_num['total_shap'].cumsum()
     shagg_num['shap_abs_pct'] = shagg_num['total_shap'] / shagg_num['total_shap'].sum()
     shagg_num['cum_shap_abs_pct'] = shagg_num['cum_shap_abs'] / shagg_num['cum_shap_abs'].max()
@@ -43,7 +32,6 @@ def compute_shap_aggregate(shap_df, weight_col='weight'):
 
 def create_residual_plot(data, feature, weight, round_value=2, print_table=False, dataset_label=""):
     """Plot actual vs predicted by feature. Usage: fig, df = create_residual_plot(data, 'DrvAge_raw', 'weight', dataset_label='Train')"""
-    # Aggregate by feature
     agg_dict = {weight: 'sum', 'actual': 'sum', 'pred': 'sum'}
     x = data.groupby([feature]).agg(agg_dict).reset_index()
     x[feature] = round(x[feature], round_value)
@@ -56,7 +44,6 @@ def create_residual_plot(data, feature, weight, round_value=2, print_table=False
     x['act_rate'] = x['actual'] / x[weight]
     x['pred_rate'] = x['pred'] / x[weight]
     
-    # Create plot
     fig, ax = plt.subplots(figsize=(12, 6))
     ax2 = ax.twinx()
     
@@ -85,13 +72,9 @@ def create_shap_range_plot(shap_df, data_df, feature, weight_field,
                            shap_round_level=3, feature_round_to=1,
                            min_ntile=0, max_ntile=0, filter_used_only=False, dataset_label="",
                            max_levels=50):
-    """
-    SHAP spread plot: for each (rounded) feature value, the exposure-weighted SHAP percentiles
-    (0-100, coloured), plus an exposure distribution panel underneath.
-    Features with more than max_levels distinct values are grouped into max_levels quantile bins
-    (each bin plotted at its median value), so every point has enough rows for percentiles.
-    Usage: fig, ntile_df = create_shap_range_plot(shap_df, data_df, 'feature', 'weight', dataset_label='Train')
-    Returns: (figure, DataFrame[feature, ntile, SHAP]) - caller saves and closes the figure.
+    """SHAP percentiles (0-100) by feature value, with an exposure panel underneath.
+
+    Features with more than max_levels values are grouped into quantile bins. Returns (fig, ntile table); caller saves it.
     """
     import seaborn  # noqa: F401  registers the 'vlag' colormap used below
 
@@ -172,41 +155,18 @@ def create_feature_importance_plot(shagg_df, top_n=20):
 
 
 def create_shap_beeswarm(shap_df, feature_df, top_n=20, weight_col='weight', max_display=20):
-    """
-    Create standard SHAP beeswarm plot with individual dots colored by feature value.
-    Shows the relationship between feature values (color) and SHAP contributions (x-axis).
-    
-    Args:
-        shap_df: DataFrame with SHAP values (rows=samples, cols=features)
-        feature_df: DataFrame with original feature values (same index as shap_df)
-        top_n: Number of top features to plot
-        weight_col: Weight column name in shap_df
-        max_display: Max features to display (same as top_n typically)
-    
-    Returns:
-        fig: matplotlib figure
-    
-    Note:
-        - Each dot is a record
-        - X-axis: SHAP value (impact on prediction)
-        - Color: Feature value (red=high, blue=low)
-        - For residual method, SHAP explains log(PP/GLM)
-    """
+    """Standard beeswarm: one dot per record, colour = feature value (red high, blue low)."""
     import shap
     print(f"  Creating SHAP beeswarm for {len(shap_df):,} samples...")
     
-    # Get top features by weighted importance
     shagg, _, shagg2 = compute_shap_aggregate(shap_df, weight_col=weight_col)
     top_features = shagg2.head(top_n)['field'].tolist()
     
-    # Filter to top features
     shap_vals = shap_df[top_features].values
     feature_vals = feature_df[top_features].values
     
-    # Get base values if available
     base_values = shap_df['base_value'].values if 'base_value' in shap_df.columns else None
     
-    # Create SHAP Explanation object
     explanation = shap.Explanation(
         values=shap_vals,
         base_values=base_values,
@@ -214,7 +174,6 @@ def create_shap_beeswarm(shap_df, feature_df, top_n=20, weight_col='weight', max
         feature_names=top_features
     )
     
-    # Create beeswarm plot
     fig = plt.figure(figsize=(10, max(6, len(top_features) * 0.4)))
     shap.plots.beeswarm(explanation, max_display=max_display, show=False)
     plt.tight_layout()
@@ -224,31 +183,12 @@ def create_shap_beeswarm(shap_df, feature_df, top_n=20, weight_col='weight', max
 
 
 def create_fast_shap_summary(shap_df, feature_df, top_n=20, weight_col='weight', n_quantiles=20):
-    """
-    Fast SHAP summary plot using percentile bands instead of scatter.
-    Uses 100% of data, plots aggregated percentiles - instant rendering.
-    
-    LIMITATION: This plot does NOT show the relationship between feature values
-    and SHAP contributions. Each feature has one colored band, hiding individual
-    record patterns. Use create_shap_beeswarm() for proper interpretation.
-    
-    Args:
-        shap_df: DataFrame with SHAP values (rows=samples, cols=features)
-        feature_df: DataFrame with original feature values (same index as shap_df)
-        top_n: Number of top features to plot
-        weight_col: Weight column name in shap_df
-        n_quantiles: Number of quantile bands for feature binning
-    
-    Returns:
-        fig: matplotlib figure
-    """
+    """Percentile-band summary on all rows. Fast, but hides the value/SHAP relationship - use the beeswarm for that."""
     print(f"  Creating fast SHAP summary for {len(shap_df):,} rows...")
     
-    # Get top features by weighted importance
     shagg, _, shagg2 = compute_shap_aggregate(shap_df, weight_col=weight_col)
     top_features = shagg2.head(top_n)['field'].tolist()
     
-    # Prepare data for plotting
     results = []
     for feat in top_features:
         if feat not in shap_df.columns or feat not in feature_df.columns:
@@ -257,7 +197,6 @@ def create_fast_shap_summary(shap_df, feature_df, top_n=20, weight_col='weight',
         shap_vals = shap_df[feat].values
         feat_vals = feature_df[feat].values
         
-        # Remove NaN
         mask = ~(np.isnan(shap_vals) | np.isnan(feat_vals))
         shap_vals = shap_vals[mask]
         feat_vals = feat_vals[mask]
@@ -265,7 +204,6 @@ def create_fast_shap_summary(shap_df, feature_df, top_n=20, weight_col='weight',
         if len(shap_vals) == 0:
             continue
         
-        # Compute percentiles for this feature
         percentiles = [5, 25, 50, 75, 95]
         shap_pcts = np.percentile(shap_vals, percentiles)
         
@@ -292,7 +230,6 @@ def create_fast_shap_summary(shap_df, feature_df, top_n=20, weight_col='weight',
     
     df_plot = pd.DataFrame(results)
     
-    # Create plot
     fig, ax = plt.subplots(figsize=(10, max(6, len(df_plot) * 0.4)))
     
     # Color map (blue to red)
@@ -301,7 +238,6 @@ def create_fast_shap_summary(shap_df, feature_df, top_n=20, weight_col='weight',
     for i, row in df_plot.iterrows():
         y = len(df_plot) - i - 1  # Reverse order
         
-        # Plot percentile bands
         # IQR (25-75)
         color = cmap(row['feat_norm'])
         ax.barh(y, row['p75'] - row['p25'], left=row['p25'], height=0.6, 
@@ -313,7 +249,6 @@ def create_fast_shap_summary(shap_df, feature_df, top_n=20, weight_col='weight',
         # Median marker
         ax.plot(row['p50'], y, 'ko', markersize=4)
     
-    # Set labels
     ax.set_yticks(range(len(df_plot)))
     ax.set_yticklabels(df_plot['feature'][::-1])
     ax.set_xlabel('SHAP Value', fontsize=11)
@@ -321,7 +256,6 @@ def create_fast_shap_summary(shap_df, feature_df, top_n=20, weight_col='weight',
     ax.axvline(x=0, color='gray', linestyle='--', alpha=0.5, linewidth=1)
     ax.grid(True, alpha=0.3, axis='x')
     
-    # Add colorbar
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=1))
     sm.set_array([])
     cbar = plt.colorbar(sm, ax=ax, pad=0.02, aspect=30)
@@ -335,35 +269,20 @@ def create_fast_shap_summary(shap_df, feature_df, top_n=20, weight_col='weight',
 
 
 def create_shap_importance_pct(shap_df, top_n=20, weight_col='weight'):
-    """
-    Create SHAP feature importance as percentage bar chart.
-    
-    Args:
-        shap_df: DataFrame with SHAP values
-        top_n: Number of top features to show
-        weight_col: Weight column name
-    
-    Returns:
-        fig: matplotlib figure
-    """
+    """Bar chart of SHAP importance as % of total."""
     print(f"  Creating SHAP importance % chart for {len(shap_df):,} rows...")
     
-    # Get weighted importance
     shagg, _, shagg2 = compute_shap_aggregate(shap_df, weight_col=weight_col)
     top_features = shagg2.head(top_n).copy()
     
-    # Calculate percentage
     total_shap = top_features['total_shap'].sum()
     top_features['pct'] = (top_features['total_shap'] / total_shap) * 100
     
-    # Create plot
     fig, ax = plt.subplots(figsize=(10, max(6, top_n * 0.35)))
     
-    # Horizontal bars
     colors = plt.cm.viridis(np.linspace(0.3, 0.9, len(top_features)))
     ax.barh(range(len(top_features)), top_features['pct'], color=colors, edgecolor='black', linewidth=0.5)
     
-    # Labels
     ax.set_yticks(range(len(top_features)))
     ax.set_yticklabels(top_features['field'])
     ax.invert_yaxis()
@@ -371,7 +290,6 @@ def create_shap_importance_pct(shap_df, top_n=20, weight_col='weight'):
     ax.set_title(f'SHAP Feature Importance (Top {top_n})', fontsize=12, fontweight='bold')
     ax.grid(True, alpha=0.3, axis='x')
     
-    # Add percentage labels
     for i, (idx, row) in enumerate(top_features.iterrows()):
         ax.text(row['pct'] + 0.5, i, f"{row['pct']:.1f}%", va='center', fontsize=9)
     

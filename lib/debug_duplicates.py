@@ -7,16 +7,7 @@ from pathlib import Path
 
 
 def load_and_check_duplicates(path, key_col='vin_date'):
-    """
-    Load file and check for duplicates on key column.
-    
-    Args:
-        path: Path to parquet file
-        key_col: Column to check for duplicates
-        
-    Returns:
-        DataFrame and duplicate stats dict
-    """
+    """Load file and check for duplicates on key column."""
     df = pd.read_parquet(path)
     
     total_rows = len(df)
@@ -43,16 +34,7 @@ def load_and_check_duplicates(path, key_col='vin_date'):
 
 
 def analyze_duplicate_patterns(df, key_col='vin_date'):
-    """
-    Analyze how many times each key appears.
-    
-    Args:
-        df: DataFrame to analyze
-        key_col: Key column to check
-        
-    Returns:
-        Series of value_counts and summary dict
-    """
+    """Analyze how many times each key appears."""
     counts = df[key_col].value_counts()
     
     # Distribution of occurrences
@@ -86,17 +68,7 @@ def analyze_duplicate_patterns(df, key_col='vin_date'):
 
 
 def compare_duplicate_rows(df, key_col='vin_date', sample_size=5):
-    """
-    Compare rows that share the same key to see what differs.
-    
-    Args:
-        df: DataFrame to analyze
-        key_col: Key column
-        sample_size: Number of duplicate groups to sample
-        
-    Returns:
-        Dict with analysis results
-    """
+    """Compare rows that share the same key to see what differs."""
     # Find keys with duplicates
     counts = df[key_col].value_counts()
     dup_keys = counts[counts > 1].index[:sample_size]
@@ -146,17 +118,7 @@ def compare_duplicate_rows(df, key_col='vin_date', sample_size=5):
 
 
 def suggest_dedup_strategy(df, key_col='vin_date', critical_cols=None):
-    """
-    Suggest deduplication strategy based on analysis.
-    
-    Args:
-        df: DataFrame to analyze
-        key_col: Key column
-        critical_cols: List of columns that must not differ (e.g., target, exposure)
-        
-    Returns:
-        Dict with recommendations
-    """
+    """Suggest deduplication strategy based on analysis."""
     if critical_cols is None:
         critical_cols = []
     
@@ -247,18 +209,7 @@ def suggest_dedup_strategy(df, key_col='vin_date', critical_cols=None):
 
 
 def create_deduplicated_file(df, key_col='vin_date', strategy='first', output_path=None):
-    """
-    Create deduplicated version of DataFrame.
-    
-    Args:
-        df: DataFrame to deduplicate
-        key_col: Key column
-        strategy: 'first', 'last', or dict of {col: agg_func} for groupby
-        output_path: Optional path to save result
-        
-    Returns:
-        Deduplicated DataFrame
-    """
+    """Create deduplicated version of DataFrame."""
     print(f"\nDeduplicating by {key_col}...")
     print(f"  Original rows: {len(df):,}")
     

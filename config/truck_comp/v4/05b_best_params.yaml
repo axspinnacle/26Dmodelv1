@@ -1,0 +1,9 @@
+# Approximate best params for truck_comp (05b not run).
+# Scaled from car_comp 05b result by positive-record ratio. Copy to output/truck_comp/v1/results/
+colsample_bytree: 0.7
+learning_rate: 0.05
+max_depth: 3
+min_child_weight: 10000
+reg_lambda: 10
+subsample: 0.7
+tweedie_variance_power: 1.2

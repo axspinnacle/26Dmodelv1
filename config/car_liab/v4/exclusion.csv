@@ -1,0 +1,4 @@
+field,CAR,SUV,TRUCK,VAN
+vc_antitheft_key_raw,1,1,1,1
+vc_cargo_van_raw,1,1,1,0
+vc_vehicle_immobilizer_raw,1,1,1,1

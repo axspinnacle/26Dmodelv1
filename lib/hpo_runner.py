@@ -1,8 +1,4 @@
-"""
-HPO Grid Search Runner
-
-Orchestrates hyperparameter optimization for XGBoost models using actuarial metrics.
-"""
+"""HPO grid search."""
 
 import numpy as np
 import pandas as pd
@@ -89,11 +85,7 @@ def run_grid_search(
     target_method="direct",
     glm_pred_train=None
 ):
-    """
-    Run grid search over hyperparameters using actuarial lift metrics.
-
-    Returns dict with: best_params, best_metrics, best_score, results_df
-    """
+    """Grid search scored by the lift metric. Returns dict: best_params, best_metrics, best_score, results_df."""
     total = int(np.prod([len(v) for v in param_grid.values()]))
     print(f"  Grid size: {total} combinations")
     print(f"  penalty_type: {(scoring_config or {}).get('penalty_type', 'linear')}")

@@ -13,17 +13,7 @@ def load_monotonicity_constraints(
     vehicle_type: str,
     feature_list: List[str]
 ) -> Dict[str, int]:
-    """
-    Load monotonicity constraints from CSV and return dict for features in training set.
-    
-    Args:
-        config_path: Path to config directory containing monotonicity.csv
-        vehicle_type: Vehicle type column name (CAR, SUV, TRUCK, VAN)
-        feature_list: List of features in the training dataset
-        
-    Returns:
-        Dict mapping feature name to constraint (-1, 0, 1)
-    """
+    """Monotonicity constraints {feature: -1/0/1} for the given vehicle type, only for features in feature_list."""
     mono_file = Path(config_path) / "monotonicity.csv"
     if not mono_file.exists():
         print(f"Warning: Monotonicity file not found: {mono_file}")
@@ -31,13 +21,12 @@ def load_monotonicity_constraints(
     
     mono_df = pd.read_csv(mono_file)
     
-    # Build constraint dict for features that exist in training data
     constraints = {}
     for _, row in mono_df.iterrows():
         field = row['field']
         if field in feature_list:
             constraint_val = row[vehicle_type]
-            # Handle both numeric and string representations
+            # blank or 'x' = no constraint
             if pd.isna(constraint_val) or constraint_val == 'x' or constraint_val == '':
                 constraints[field] = 0
             else:
@@ -51,16 +40,7 @@ def load_exclusions(
     config_path: str,
     vehicle_type: str
 ) -> List[str]:
-    """
-    Load feature exclusions from CSV.
-    
-    Args:
-        config_path: Path to config directory containing exclusion.csv
-        vehicle_type: Vehicle type column name (CAR, SUV, TRUCK, VAN)
-        
-    Returns:
-        List of feature names to exclude
-    """
+    """Features marked 1 for this vehicle type in exclusion.csv."""
     excl_file = Path(config_path) / "exclusion.csv"
     if not excl_file.exists():
         print(f"Warning: Exclusion file not found: {excl_file}")
@@ -68,7 +48,6 @@ def load_exclusions(
     
     excl_df = pd.read_csv(excl_file)
     
-    # Get features marked as 1 (exclude) for this vehicle type
     excluded = excl_df[excl_df[vehicle_type] == 1]['field'].tolist()
     
     print(f"Loaded {len(excluded)} exclusions for {vehicle_type}")
@@ -76,11 +55,7 @@ def load_exclusions(
 
 
 def expand_exclusions(exclusions: List[str], encoding_summary: pd.DataFrame) -> List[str]:
-    """
-    Map excluded source columns to the columns they produced after encoding
-    (e.g. one-hot vc_softtop_raw -> vc_softtop_raw_0, vc_softtop_raw_4, ...).
-    Uses encoding_summary['output_columns'] from apply_master_encoding.
-    """
+    """Add the encoded columns of excluded one-hot sources (vc_softtop_raw -> vc_softtop_raw_0, ...)."""
     out = set(exclusions)
     produced = encoding_summary.set_index('original_column')['output_columns'].astype(str)
     for col in exclusions:
@@ -100,29 +75,17 @@ def load_glm_predictions(
     target_col: str,
     drop_missing: bool = False
 ) -> tuple:
-    """
-    Load raw GLM predictions and join to data.
-    
-    Args:
-        aux_data_path: Path to directory containing control model file
-        control_file: Filename of control model parquet
-        data: DataFrame to join with (must have join_key column)
-        join_key: Column name to join on (e.g., 'vin_date')
-        target_col: Column name of GLM predictions (e.g., 'pred_pp_coll')
-        drop_missing: If True, use inner join and return matched indices. If False, use left join and fill with median.
-        
-    Returns:
-        If drop_missing=False: Series of raw GLM predictions (same index as data)
-        If drop_missing=True: (Series of GLM predictions, matched_indices)
+    """Join raw GLM predictions onto data by join_key.
+
+    drop_missing=True: inner join, returns (glm, matched_index).
+    drop_missing=False: left join, missing filled with the median, returns glm only.
     """
     control_path = Path(aux_data_path) / control_file
     if not control_path.exists():
         raise FileNotFoundError(f"Control model file not found: {control_path}")
     
-    # Load GLM predictions
     glm_preds = pd.read_parquet(control_path, columns=[join_key, target_col])
     
-    # Join with data - preserve original index
     join_type = 'inner' if drop_missing else 'left'
     data_with_glm = data[[join_key]].reset_index().merge(
         glm_preds,
@@ -131,14 +94,12 @@ def load_glm_predictions(
     ).set_index('index')
     
     if drop_missing:
-        # Report dropped rows
         matched_count = len(data_with_glm)
         dropped_count = len(data) - matched_count
         dropped_pct = 100 * dropped_count / len(data) if len(data) > 0 else 0
         print(f"  Removed {dropped_count:,} rows ({dropped_pct:.2f}%) without GLM predictions")
         matched_indices = data_with_glm.index
     else:
-        # Handle missing GLM predictions with fillna
         missing_count = data_with_glm[target_col].isna().sum()
         if missing_count > 0:
             print(f"Warning: {missing_count} rows missing GLM predictions, filling with median")
@@ -146,7 +107,6 @@ def load_glm_predictions(
             data_with_glm[target_col] = data_with_glm[target_col].fillna(median_pred)
         matched_indices = None
     
-    # Ensure positive values
     min_val = data_with_glm[target_col].min()
     if min_val <= 0:
         print(f"Warning: Non-positive GLM predictions found (min={min_val}), adding offset")
@@ -154,7 +114,6 @@ def load_glm_predictions(
     
     print(f"Loaded GLM predictions: mean={data_with_glm[target_col].mean():.4f}, std={data_with_glm[target_col].std():.4f}")
     
-    # Return based on mode
     if drop_missing:
         return data_with_glm[target_col], matched_indices
     else:
@@ -169,43 +128,25 @@ def load_glm_init(
     target_col: str,
     transform: str = "log"
 ) -> pd.Series:
-    """
-    Load GLM control model predictions and join to data.
-    DEPRECATED: Use load_glm_predictions() instead and transform as needed.
-    
-    Args:
-        aux_data_path: Path to directory containing control model file
-        control_file: Filename of control model parquet
-        data: DataFrame to join with (must have join_key column)
-        join_key: Column name to join on (e.g., 'vin_date')
-        target_col: Column name of GLM predictions (e.g., 'pred_pp_coll')
-        transform: 'log' or 'raw' - whether to log-transform predictions
-        
-    Returns:
-        Series of base_margin values (same index as data)
-    """
+    """Old version of load_glm_predictions that returns a log/raw base margin. Kept for old notebooks."""
     control_path = Path(aux_data_path) / control_file
     if not control_path.exists():
         raise FileNotFoundError(f"Control model file not found: {control_path}")
     
-    # Load GLM predictions
     glm_preds = pd.read_parquet(control_path, columns=[join_key, target_col])
     
-    # Join with data
     data_with_glm = data[[join_key]].merge(
         glm_preds,
         on=join_key,
         how='left'
     )
     
-    # Handle missing GLM predictions
     missing_count = data_with_glm[target_col].isna().sum()
     if missing_count > 0:
         print(f"Warning: {missing_count} rows missing GLM predictions, filling with median")
         median_pred = data_with_glm[target_col].median()
         data_with_glm[target_col] = data_with_glm[target_col].fillna(median_pred)
     
-    # Transform if requested
     if transform == "log":
         # Ensure positive values for log
         min_val = data_with_glm[target_col].min()
@@ -222,11 +163,7 @@ def load_glm_init(
 
 
 def save_model_features(booster, output_base: str, stage: str = "05c") -> pd.DataFrame:
-    """
-    Save every model feature with its XGBoost total-gain rank (1 = most important).
-    Features never used in a split get a blank rank.
-    Writes {output_base}/results/{stage}_model_features.csv (columns: feature, xgb_rank).
-    """
+    """Write results/{stage}_model_features.csv: every model feature and its XGBoost gain rank (blank = never split on)."""
     gain = booster.get_score(importance_type='total_gain')
     df = pd.DataFrame({'feature': booster.feature_names})
     df['gain'] = df['feature'].map(gain)
@@ -251,27 +188,11 @@ def apply_feature_filters(
     join_key: str = None,
     verbose: bool = True
 ) -> List[str]:
-    """
-    Filter out excluded features from feature list.
-    Automatically excludes target, exposure, join_key and any LEAKAGE_PREFIXES column.
-    
-    Args:
-        features: List of all features
-        exclusions: List of features to exclude
-        target: Target column name (auto-excluded)
-        exposure: Exposure column name (auto-excluded)
-        join_key: Join key column name (auto-excluded)
-        verbose: Print filtering results
-        
-    Returns:
-        Filtered feature list
-    """
+    """Drop exclusions, target, exposure, join_key and leakage columns (LEAKAGE_PREFIXES) from the feature list."""
     original_count = len(features)
     
-    # Build complete exclusion list
     all_exclusions = set(exclusions)
     
-    # Auto-exclude target, exposure, join_key to prevent data leakage
     auto_exclude = []
     if target:
         all_exclusions.add(target)
@@ -289,7 +210,6 @@ def apply_feature_filters(
         all_exclusions.update(leakage)
         print(f"Leakage guard: dropped {len(leakage)} features: {leakage}")
 
-    # Filter features
     filtered = [f for f in features if f not in all_exclusions]
     
     if verbose:
@@ -307,23 +227,11 @@ def build_xgb_params(
     monotonicity_dict: Dict[str, int],
     feature_names: List[str]
 ) -> Dict:
-    """
-    Build XGBoost parameters with monotonicity constraints.
-    
-    Args:
-        base_params: Base XGBoost parameters from config
-        monotonicity_dict: Dict of feature -> constraint value
-        feature_names: Ordered list of feature names (must match training data)
-        
-    Returns:
-        Updated parameters dict with monotone_constraints tuple
-    """
+    """Copy of base_params with monotone_constraints in feature_names order."""
     params = base_params.copy()
     
-    # Build constraint tuple in same order as feature_names
     constraints = tuple(monotonicity_dict.get(f, 0) for f in feature_names)
     
-    # Only add if there are non-zero constraints
     if any(c != 0 for c in constraints):
         params['monotone_constraints'] = constraints
         non_zero = sum(1 for c in constraints if c != 0)
@@ -338,27 +246,13 @@ def apply_target_cap(
     target_cap,
     verbose=True
 ):
-    """
-    DEPRECATED: Use apply_loss_cap() instead.
-    Apply cap to target variable to remove extreme outliers.
-    
-    Args:
-        pp_train: Training target values (Series or array)
-        pp_test: Test target values (Series or array)
-        target_cap: Maximum allowed value (e.g., 100000)
-        verbose: Whether to print summary
-        
-    Returns:
-        Tuple of (capped_train, capped_test)
-    """
+    """Old cap on the target itself. Use apply_loss_cap instead."""
     if target_cap is None:
         return pp_train, pp_test
     
-    # Count values that will be capped
     n_cap_train = (pp_train > target_cap).sum()
     n_cap_test = (pp_test > target_cap).sum()
     
-    # Apply cap
     if isinstance(pp_train, pd.Series):
         pp_train_capped = pp_train.clip(upper=target_cap)
         pp_test_capped = pp_test.clip(upper=target_cap)
@@ -383,21 +277,10 @@ def apply_loss_cap(
     exposure_floor=None,
     verbose=True
 ):
-    """
-    Apply loss cap and filter records based on target/exposure columns.
-    Supports combined targets (e.g., pp_bi+pp_pd) and exposures (e.g., ee_bi_imps+ee_pd_imps).
-    
-    Args:
-        train_df: Training dataframe
-        test_df: Test dataframe
-        loss_cap: Maximum allowed loss value (None to skip)
-        target_col: Target column name (e.g., "pp_bi" or "pp_bi+pp_pd" for combined)
-        exposure_col: Exposure column name (e.g., "ee_bi_imps" or "ee_bi_imps+ee_pd_imps" for combined)
-        exposure_floor: Minimum exposure value (e.g., 0.0833 for 1 month)
-        verbose: Whether to print summary
-        
-    Returns:
-        Tuple of (train_filtered, test_filtered)
+    """Cap loss at loss_cap and floor exposure at exposure_floor, for train and test.
+
+    target/exposure can be combined as 'a+b' (e.g. pp_bi+pp_pd). Uncapped targets are kept as {target}_uncapped.
+    Returns (train, test).
     """
     import numpy as np
     
@@ -407,7 +290,7 @@ def apply_loss_cap(
         # No capping needed, so don't create _uncapped columns
         return train_df.copy(), test_df.copy()
     
-    # Check if combined mode (+ syntax)
+    # 'a+b' = combined columns
     is_combined = '+' in target_col and '+' in exposure_col
     
     if loss_cap is None:
@@ -429,7 +312,6 @@ def apply_loss_cap(
         return train_filtered, test_filtered
     
     if is_combined:
-        # Parse combined columns
         pp_cols = [c.strip() for c in target_col.split('+')]
         ee_cols = [c.strip() for c in exposure_col.split('+')]
         
@@ -449,7 +331,6 @@ def apply_loss_cap(
         train_mask = train_ee_combined > 0
         test_mask = test_ee_combined > 0
     else:
-        # Single column mode
         if verbose:
             print(f"\n=== Applying Loss Cap: {loss_cap:,} (target: {target_col}) ===")
         
@@ -466,7 +347,6 @@ def apply_loss_cap(
     # 2. Apply exposure floor (prevents extreme PP from tiny exposures)
     if exposure_floor:
         if is_combined:
-            # Apply floor to both exposure columns
             n_floor_train_1 = (train_filtered[ee1] < exposure_floor).sum()
             n_floor_test_1 = (test_filtered[ee1] < exposure_floor).sum()
             n_floor_train_2 = (train_filtered[ee2] < exposure_floor).sum()
@@ -482,7 +362,6 @@ def apply_loss_cap(
                 print(f"    {ee1} - Train: {n_floor_train_1:,}, Test: {n_floor_test_1:,}")
                 print(f"    {ee2} - Train: {n_floor_train_2:,}, Test: {n_floor_test_2:,}")
         else:
-            # Apply floor to single exposure column
             n_floor_train = (train_filtered[exposure_col] < exposure_floor).sum()
             n_floor_test = (test_filtered[exposure_col] < exposure_floor).sum()
             
@@ -499,7 +378,7 @@ def apply_loss_cap(
         pp_train = train_filtered[pp1] + train_filtered[pp2]
         pp_test = test_filtered[pp1] + test_filtered[pp2]
         
-        # Use max exposure for the combined PP (critical for bi+pd where exposures differ)
+        # Combined PP uses the max exposure (bi and pd exposures differ)
         ee_train = np.maximum(train_filtered[ee1], train_filtered[ee2])
         ee_test = np.maximum(test_filtered[ee1], test_filtered[ee2])
         
@@ -507,7 +386,6 @@ def apply_loss_cap(
         loss_train = train_filtered[pp1] * train_filtered[ee1] + train_filtered[pp2] * train_filtered[ee2]
         loss_test = test_filtered[pp1] * test_filtered[ee1] + test_filtered[pp2] * test_filtered[ee2]
     else:
-        # Single: use columns directly
         pp_train = train_filtered[target_col]
         pp_test = test_filtered[target_col]
         ee_train = train_filtered[exposure_col]
@@ -545,7 +423,6 @@ def apply_loss_cap(
             test_filtered.loc[cap_mask_test, pp1] = test_filtered.loc[cap_mask_test, pp1] * ratio_test
             test_filtered.loc[cap_mask_test, pp2] = test_filtered.loc[cap_mask_test, pp2] * ratio_test
     else:
-        # Single loss type - direct capping
         cap_mask_train = loss_train > loss_cap
         cap_mask_test = loss_test > loss_cap
         
@@ -571,22 +448,7 @@ def apply_loss_cap_single(
     exposure_floor=None,
     verbose=True
 ):
-    """
-    Apply loss cap and exposure floor to a single dataframe (for scoring).
-    Similar to apply_loss_cap but for one dataset.
-    Supports combined targets (e.g., pp_bi+pp_pd) and exposures (e.g., ee_bi_imps+ee_pd_imps).
-    
-    Args:
-        df: Input dataframe
-        loss_cap: Maximum allowed loss value (None to skip)
-        target_col: Target column name (e.g., "pp_bi" or "pp_bi+pp_pd" for combined)
-        exposure_col: Exposure column name (e.g., "ee_bi_imps" or "ee_bi_imps+ee_pd_imps" for combined)
-        exposure_floor: Minimum exposure value (e.g., 0.0833 for 1 month)
-        verbose: Whether to print summary
-        
-    Returns:
-        Filtered and capped dataframe
-    """
+    """apply_loss_cap for one dataframe (used by 08 scoring)."""
     import numpy as np
     
     if loss_cap is None and exposure_floor is None:
@@ -594,13 +456,12 @@ def apply_loss_cap_single(
             print("  No loss cap or exposure floor applied")
         return df.copy()
     
-    # Check if combined mode (+ syntax)
+    # 'a+b' = combined columns
     is_combined = '+' in target_col and '+' in exposure_col
     
     df_filtered = df.copy()
     
     if is_combined:
-        # Parse combined columns
         pp_cols = [c.strip() for c in target_col.split('+')]
         ee_cols = [c.strip() for c in exposure_col.split('+')]
         
@@ -646,7 +507,6 @@ def apply_loss_cap_single(
                 print(f"  Loss capped at {loss_cap:,}: {n_cap:,} records ({n_cap/len(df_filtered)*100:.4f}%)")
     
     else:
-        # Single column mode
         # 1. Filter: Keep records with exposure > 0
         mask = df_filtered[exposure_col] > 0
         if verbose:
@@ -691,25 +551,9 @@ def generate_top_targets_report(
     glm_col=None,
     n=100
 ):
-    """
-    Generate report of top N records by target value (before capping).
-    
-    Args:
-        df: Dataframe with all columns
-        target_col: Target column name (e.g., "target" = pp/glm)
-        pp_bi_col, pp_pd_col: PP column names
-        ee_bi_col, ee_pd_col: Exposure column names
-        incurred_bi_col, incurred_pd_col: Incurred loss columns
-        glm_col: GLM prediction column (optional)
-        n: Number of top records
-        
-    Returns:
-        DataFrame with top N records
-    """
-    # Get top N by target
+    """Top n records by target before capping, with their PP, exposure, incurred and GLM columns."""
     top_n = df.nlargest(n, target_col).copy()
     
-    # Calculate losses
     top_n['loss_bi'] = top_n[pp_bi_col] * top_n[ee_bi_col]
     # PD only when both PP and exposure columns exist (avoids None -> KeyError [nan])
     has_pd = bool(pp_pd_col and ee_pd_col and pp_pd_col in top_n.columns and ee_pd_col in top_n.columns)
@@ -720,7 +564,6 @@ def generate_top_targets_report(
         top_n['loss_pd'] = 0
         top_n['loss_total'] = top_n['loss_bi']
     
-    # Select columns for report
     report_cols = [target_col, pp_bi_col, ee_bi_col, 'loss_bi']
     
     if has_pd:
@@ -741,17 +584,7 @@ def transform_target(
     glm_pred,  # Can be pd.Series, np.ndarray, or None
     method: str
 ):
-    """
-    Transform pure premium target for GBM training.
-    
-    Args:
-        pp: Pure premium (actual target values) - Series or array
-        glm_pred: GLM predictions (baseline from carrier features) - Series, array, or None
-        method: 'residual' (pp/glm) or 'direct' (pp as-is)
-        
-    Returns:
-        Transformed target for GBM training (same type as input)
-    """
+    """GBM target: pp/glm for 'residual', pp for 'direct'."""
     if method == "residual":
         if glm_pred is None:
             raise ValueError("glm_pred required for residual method")
@@ -769,17 +602,7 @@ def inverse_transform(
     glm_pred,  # Can be pd.Series, np.ndarray, or None
     method: str
 ):
-    """
-    Convert GBM predictions back to pure premium space.
-    
-    Args:
-        gbm_pred: Raw GBM predictions - Series or array
-        glm_pred: GLM predictions (baseline from carrier features) - Series, array, or None
-        method: 'residual' (multiply by glm) or 'direct' (use as-is)
-        
-    Returns:
-        Final pure premium predictions (same type as input)
-    """
+    """Back to pure premium: gbm*glm for 'residual', gbm for 'direct'."""
     if method == "residual":
         if glm_pred is None:
             raise ValueError("glm_pred required for residual method")
@@ -798,22 +621,8 @@ def predict_with_transform(
     glm_pred: Optional[pd.Series],
     target_method: str
 ) -> Tuple[pd.Series, pd.Series]:
-    """
-    Generate predictions and apply inverse transform.
-    
-    Args:
-        model: Trained XGBoost model
-        X: Features for prediction
-        glm_pred: GLM predictions (required for residual method)
-        target_method: 'residual' or 'direct'
-        
-    Returns:
-        Tuple of (gbm_pred_raw, pp_predicted)
-        - gbm_pred_raw: Raw GBM output (ratio for residual, PP for direct)
-        - pp_predicted: Final PP predictions (after inverse transform)
-    """
-    # Ensure X is a proper DataFrame with column names as list (not Index)
-    # XGBoost requires feature_names attribute for validation
+    """Predict and return (gbm_raw, pp_predicted). gbm_raw is the ratio for residual, PP for direct."""
+    # XGBoost validates feature names, so pass a DataFrame with list columns
     if isinstance(X, pd.DataFrame):
         X = X.copy()
         X.columns = list(X.columns)
@@ -826,18 +635,7 @@ def predict_with_transform(
 
 
 def load_base_margin(output_base, use_base_margin=False, dataset="train", verbose=True):
-    """
-    Load base_margin file if enabled.
-    
-    Args:
-        output_base: Path to output directory
-        use_base_margin: Whether to load base_margin
-        dataset: "train", "test", or score name (e.g., "holdout")
-        verbose: Print status messages
-    
-    Returns:
-        numpy array of base_margin values, or None if disabled/not found
-    """
+    """base_margin array for dataset ('train', 'test', or a score name), or None if off or not found."""
     import os
     import pandas as pd
     
@@ -846,11 +644,9 @@ def load_base_margin(output_base, use_base_margin=False, dataset="train", verbos
             print(f"\n* Base margin disabled (use_base_margin=False)")
         return None
     
-    # Determine file path based on dataset type
     if dataset in ["train", "test"]:
         file_path = f"{output_base}/data/04c_{dataset}_base_margin.parquet"
     else:
-        # Scoring data
         file_path = f"{output_base}/data/04c_score_{dataset}_base_margin.parquet"
     
     if os.path.exists(file_path):
@@ -877,22 +673,7 @@ def save_predictions(
     index: pd.Index = None,
     **extra_cols
 ) -> str:
-    """
-    Save predictions in standard format.
-    
-    Args:
-        output_base: Output directory path
-        stage: Stage identifier (e.g., '05a', '05c', '08')
-        split: Data split ('train', 'test', 'holdout')
-        y_actual: Actual target values
-        y_pred: Predicted values
-        exposure: Exposure/weights
-        index: Index to use (e.g., train_orig.index with vin_date)
-        **extra_cols: Additional columns to include (e.g., fold=...)
-        
-    Returns:
-        Path to saved file
-    """
+    """Write results/{stage}_predictions_{split}.parquet (actual, prediction, exposure, plus extra_cols)."""
     import os
     
     results_dir = f"{output_base}/results"
@@ -911,7 +692,6 @@ def save_predictions(
     elif isinstance(y_actual, pd.Series) and y_actual.index.name is not None:
         df.index = y_actual.index
     
-    # Add extra columns
     for col_name, col_data in extra_cols.items():
         df[col_name] = col_data
     
@@ -934,29 +714,8 @@ def save_debug_output(
     exposure: pd.Series,
     index: pd.Index = None
 ) -> str:
-    """
-    Save full debug output with all columns for analysis.
-    
-    Args:
-        output_base: Output directory path
-        stage: Stage identifier (e.g., '05c', '08')
-        split: Data split ('train', 'test', 'holdout')
-        data_orig: Original dataframe containing source columns
-        pp_actual: Actual pure premium
-        glm_pred: GLM predictions
-        gbm_pred_raw: Raw GBM output (ratio or PP depending on method)
-        pp_predicted: Final PP predictions
-        exposure: Exposure values
-        index: Index to use (e.g., train_orig.index with vin_date)
-        
-    Returns:
-        Path to saved file
-        
-    Notes:
-        Expected columns in data_orig:
-        - vin_date, fold
-        - incurred_raw_coll_imps (or similar loss column)
-        - vc_msrp_impa, Dep_factor, veh_value_dep (if available)
+    """Write results/{stage}_debug_{split}.parquet: actual, GLM, GBM raw, prediction, exposure, plus
+    fold/msrp/Dep_factor/veh_value_dep when data_orig has them. Stage 09 and percentile lift read this file.
     """
     import os
     
@@ -984,7 +743,6 @@ def save_debug_output(
     
     for target_col, source_col in optional_cols.items():
         if isinstance(source_col, list):
-            # Try multiple possible column names
             for col in source_col:
                 if col in data_orig.columns:
                     debug_df[target_col] = data_orig[col].values
@@ -993,18 +751,15 @@ def save_debug_output(
             if source_col in data_orig.columns:
                 debug_df[target_col] = data_orig[source_col].values
     
-    # Set index if provided
     if index is not None:
         debug_df.index = index
     
-    # Save
     output_file = f"{results_dir}/{stage}_debug_{split}.parquet"
     debug_df.to_parquet(output_file, index=True)
     
     print(f"  Debug output: {output_file} ({len(debug_df.columns)} columns)")
     return output_file
 
-# New function
 def load_glm_for_scoring(df,cfg,score_cfg,pc_id,target_method):
     """
     Load GLM predictions for scoring. Returns (glm_preds, matched_indices).
@@ -1042,26 +797,11 @@ def create_model_analysis_table(
     pred_pp,
     dataset_name="data"
 ):
-    """
-    Create analysis table with incurred calculations.
-    
-    Args:
-        df: Original dataframe (for index)
-        target: GBM target (pp/glm for residual)
-        pred_gbm: GBM raw prediction
-        glm_pred: GLM prediction
-        exposure: Exposure values
-        pp_actual_from_capped: PP from capped loss (capped_loss / ee)
-        pred_pp: Predicted PP (pred_gbm * glm for residual)
-    
-    Returns:
-        DataFrame with analysis columns (formulas in column names)
-    """
+    """Row-level table of actual vs predicted incurred (column names show the formulas)."""
     import pandas as pd
     
     analysis = pd.DataFrame(index=df.index)
     
-    # Basic inputs
     analysis['exposure (ee)'] = exposure
     analysis['glm_pred (glm)'] = glm_pred
     analysis['pp_from_capped_loss (capped_loss/ee)'] = pp_actual_from_capped
@@ -1088,18 +828,7 @@ def create_decile_analysis_table(
     exposure_col='exposure (ee)',
     n_deciles=10
 ):
-    """
-    Aggregate analysis table by decile.
-    
-    Args:
-        analysis_df: Output from create_model_analysis_table()
-        pred_col: Column for decile ranking
-        exposure_col: Exposure column
-        n_deciles: Number of deciles
-        
-    Returns:
-        DataFrame with decile-level aggregations
-    """
+    """create_model_analysis_table output summed by decile of pred_col."""
     import pandas as pd
     
     df = analysis_df.copy()
@@ -1120,7 +849,6 @@ def create_decile_analysis_table(
         **{k: (k, v) for k, v in agg_cols.items()}
     ).reset_index()
     
-    # Add averages
     decile_table['avg_target (target_wt / ee)'] = (
         decile_table['target_weighted (target * ee)'] / decile_table['exposure (ee)']
     )
